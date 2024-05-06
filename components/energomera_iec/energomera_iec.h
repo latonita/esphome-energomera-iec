@@ -85,10 +85,10 @@ class EnergomeraIecComponent : public PollingComponent, public uart::UARTDevice 
   } state_{State::NOT_INITIALIZED};
 
   struct {
-    uint32_t start_time;
-    uint32_t delay_ms;
+    uint32_t start_time{0};
+    uint32_t delay_ms{0};
     State next_state{State::IDLE};
-  } wait_{0};
+  } wait_;
 
   bool is_idling() const { return this->state_ == State::WAIT || this->state_ == State::IDLE; };
 
