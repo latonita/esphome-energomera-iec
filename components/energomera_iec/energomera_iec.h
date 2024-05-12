@@ -13,6 +13,7 @@
 
 #include "energomera_iec_uart.h"
 #include "energomera_iec_sensor.h"
+#include "object_locker.h"
 
 namespace esphome {
 namespace energomera_iec {
@@ -69,6 +70,7 @@ class EnergomeraIecComponent : public PollingComponent, public uart::UARTDevice 
   enum class State : uint8_t {
     NOT_INITIALIZED,
     IDLE,
+    TRY_LOCK_BUS,
     WAIT,
     WAITING_FOR_RESPONSE,
     OPEN_SESSION,
@@ -166,6 +168,15 @@ class EnergomeraIecComponent : public PollingComponent, public uart::UARTDevice 
   } stats_;
 
   uint8_t failures_before_reboot_{0};
+
+  struct LoopState {
+    uint32_t session_started_ms{0};             // start of session
+    SensorMap::iterator request_iter{nullptr};  // talking to meter
+    SensorMap::iterator sensor_iter{nullptr};   // publishing sensor values
+  } loop_state_;
+
+  bool try_lock_uart_session_();
+  void unlock_uart_session_();
 };
 
 }  // namespace energomera_iec
