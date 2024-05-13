@@ -99,14 +99,14 @@
 
 ## 6. Настройка основного компонента
 Подлючаем внешний компонент из репозитория
-```
+```yaml
 external_components:
   - source: github://latonita/esphome-energomera-iec
     refresh: 30s
     components: [energomera_iec]
 ```
 Конфигурируем UART 9600 7E1:
-```
+```yaml
 uart:
   rx_pin: GPIO16
   tx_pin: GPIO17
@@ -117,7 +117,7 @@ uart:
 ```
 
 Основной модуль (hub)
-```
+```yaml
 energomera_iec:
   id: ce102m
   update_interval: 30s
@@ -137,7 +137,7 @@ energomera_iec:
 Реализованы два типа сенсоров:
 - `sensor` - числовые данные, float
 - `text_sensor` - текстовые данные в формате "как пришли от счетчика"
-```
+```yaml
 sensor/text_sensor:
   - platform: energomera_iec
     # energomera_iec_id: ce102m   # обязательно, если несколько счетчиков
@@ -161,7 +161,7 @@ sensor/text_sensor:
 [Руководство пользователя CE301 и CE303](http://sp.energomera.ru/documentations/product/ce301_303_rp.pdf).
 
 ### 7.1 Пример. Запрос потребления электроэнергии в кВт*ч
-```
+```yaml
 sensor:
   - platform: energomera_iec
     request: ET0PE()
@@ -184,7 +184,7 @@ sensor:
 ### 7.2 Пример. Запрос даты
 Дату счетчик возвращает в формате `нн.дд.мм.гг`, где - день недели 00 - воскресенье, 01 понедельник. 
 Превратить это в нормальную дату можно, например,так:
-```
+```yaml
 text_sensor:
   - platform: energomera_iec
     name: Date
@@ -201,7 +201,7 @@ text_sensor:
 Можно опрашивать несколько устройств на одной шине, необходимо **обязательно** указывать адрес счетчика.
 В противном случае счетчики начнут отвечать одновременно и процесс считывания данных будет нарушен.
 
-```
+```yaml
 uart:
     id: bus_1
     rx_pin: GPIO4
@@ -247,7 +247,7 @@ sensor:
 
 * [Скачать конфиг ce102m.yaml](ce102m.yaml)
 
-```
+```yaml
 esphome:
   name: energomera-ce102m
 
@@ -389,7 +389,7 @@ ota:
 
 * [Скачать конфиг ce303.yaml](ce303.yaml)
 
-```
+```yaml
 esphome:
   name: energomera-ce303
 
