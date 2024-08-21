@@ -28,6 +28,7 @@ DEFAULTS_UPDATE_INTERVAL = "30s"
 CONF_ENERGOMERA_IEC_ID = "energomera_iec_id"
 CONF_REQUEST = "request"
 CONF_DELAY_BETWEEN_REQUESTS = "delay_between_requests"
+CONF_SUB_INDEX = "sub_index"
 
 CONF_INDICATOR = "indicator"
 CONF_REBOOT_AFTER_FAILURE = "reboot_after_failure"
