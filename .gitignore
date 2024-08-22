@@ -142,3 +142,4 @@ sdkconfig.*
 /*.yaml
 /*.yml
 !ce102m.yaml
+!ce303.yaml

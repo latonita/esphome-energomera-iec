@@ -1,0 +1,174 @@
+esphome:
+  name: energy-counter
+  friendly_name: energy_counter
+
+esp8266:
+  board: nodemcuv2
+
+logger:
+  level: DEBUG
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+external_components:
+  - source: github://latonita/esphome-energomera-iec
+    refresh: 10s
+    components: [energomera_iec]
+
+uart:
+    rx_pin: D5
+    tx_pin: D6
+    baud_rate: 9600
+    data_bits: 7
+    parity: EVEN
+    stop_bits: 1
+    rx_buffer_size: 512
+
+energomera_iec:
+  id: ce303
+  address: 123456789
+  update_interval: 10s
+#  delay_between_requests: 50ms
+#  receive_timeout: 500ms
+
+sensor:
+  - platform: energomera_iec
+    request: ET0PE()
+    index: 1
+    name: Электроэнергия
+    unit_of_measurement: kWh
+    accuracy_decimals: 3
+    device_class: energy
+    state_class: total_increasing
+
+  - platform: energomera_iec
+    request: ET0PE()
+    index: 2
+    name: Электроэнергия T1
+    unit_of_measurement: kWh
+    accuracy_decimals: 3
+    device_class: energy
+    state_class: total_increasing
+
+  - platform: energomera_iec
+    request: ET0PE()
+    index: 3
+    name: Электроэнергия T2
+    unit_of_measurement: kWh
+    accuracy_decimals: 3
+    device_class: energy
+    state_class: total_increasing
+
+  - platform: energomera_iec
+    name: Ток фаза A
+    request: CURRE()
+    index: 1
+    unit_of_measurement: A
+    accuracy_decimals: 3
+    device_class: current
+    state_class: measurement
+
+  - platform: energomera_iec
+    name: Ток фаза B
+    request: CURRE()
+    index: 2
+    unit_of_measurement: A
+    accuracy_decimals: 3
+    device_class: current
+    state_class: measurement
+
+  - platform: energomera_iec
+    name: Ток фаза C
+    request: CURRE()
+    index: 3
+    unit_of_measurement: A
+    accuracy_decimals: 3
+    device_class: current
+    state_class: measurement
+
+  - platform: energomera_iec
+    name: Напряжение фаза A
+    request: VOLTA()
+    index: 1
+    unit_of_measurement: V
+    accuracy_decimals: 3
+    device_class: voltage
+    state_class: measurement
+
+  - platform: energomera_iec
+    name: Напряжение фаза B
+    request: VOLTA()
+    index: 2
+    unit_of_measurement: V
+    accuracy_decimals: 3
+    device_class: voltage
+    state_class: measurement
+
+  - platform: energomera_iec
+    name: Напряжение фаза C
+    request: VOLTA()
+    index: 3
+    unit_of_measurement: V
+    accuracy_decimals: 3
+    device_class: voltage
+    state_class: measurement
+
+  - platform: energomera_iec
+    name: Активная мощность
+    request: POWEP()
+    index: 1
+    unit_of_measurement: kW
+    accuracy_decimals: 3
+    device_class: power
+    state_class: measurement
+
+  - platform: energomera_iec
+    name: Активная мощность фаза A
+    request: POWPP()
+    unit_of_measurement: kW
+    accuracy_decimals: 3
+    index: 1
+    device_class: power
+    state_class: measurement
+
+  - platform: energomera_iec
+    name: Активная мощность фаза B
+    request: POWPP()
+    unit_of_measurement: kW
+    accuracy_decimals: 3
+    index: 2
+    device_class: power
+    state_class: measurement
+
+  - platform: energomera_iec
+    name: Активная мощность фаза C
+    request: POWPP()
+    unit_of_measurement: kW
+    accuracy_decimals: 3
+    index: 3
+    device_class: power
+    state_class: measurement
+
+text_sensor:
+  - platform: energomera_iec
+    name: Заводской номер
+    request: SNUMB()
+    entity_category: diagnostic
+
+  - platform: energomera_iec
+    name: Время
+    request: TIME_()
+    entity_category: diagnostic
+
+  - platform: energomera_iec
+    name: Дата
+    request: DATE_()
+    entity_category: diagnostic
+    filters:
+      - lambda: |-
+          std::string str{x};
+          str.erase(0,3);
+          str.insert(6,"20");
+          return str;
