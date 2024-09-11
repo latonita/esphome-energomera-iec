@@ -1,4 +1,4 @@
-# ESPHome компонент для подключения счетчиков электроэнергии Энергомера CE102M CE208 CE301 CE303 CE307 CE308 по RS-485 (ГОСТ МЭК/IEC 61107-2011)
+# ESPHome компонент для подключения счетчиков электроэнергии Энергомера CE102M CE207 CE208 CE301 CE303 CE307 CE308 по RS-485 (ГОСТ МЭК/IEC 61107-2011)
 
 * [1. Назначение](#1-назначение)
 * [2. Отказ от ответственности](#2-отказ-от-ответственности)
@@ -12,8 +12,8 @@
 
 ## 1. Назначение
 Компонент для считывания данных с электросчетчиков, поддерживающих протокол МЭК/IEC 61107, таких как Энергомера СЕ102М, СЕ301, СЕ303. 
-Потенциально может работать и сдругими счетчиками поддерживающими данный ГОСТ. Кроме того, работает и с некоторыми счетчиками Энергомера,
-заявленными как СПОДЭС. Например, СЕ307,СЕ308,CE208.
+Потенциально, может работать и сдругими счетчиками поддерживающими данный ГОСТ. Кроме того, работает и с некоторыми счетчиками Энергомера,
+заявленными как СПОДЭС (SPds в названии - например *CE207-R7.849.2.OA SPds*). Проверено на нескольких CE207, СЕ208, СЕ307, СЕ308.
 
 ## 2. Отказ от ответственности
 Пользуясь данным ПО пользователь полностью берет на себя всю ответственность за любые последствия.
@@ -188,8 +188,20 @@ text_sensor:
           str.insert(6,"20");
           return str;
 ```
-Некоторые счетчики (например СЕ207) дату возвращают в формате `н.дд.мм.гг`, например `3.11.09.24`. 
-Поэтому в lambda выражении надо поправить удаление лишних символов: `str.erase(0,2);`.
+Некоторые счетчики (например, СЕ207) дату возвращают в формате `н.дд.мм.гг`, например `3.11.09.24`. 
+Поэтому в lambda выражении надо поправить удаление лишних символов: `str.erase(0,2);`:
+```
+text_sensor:
+  - platform: energomera_iec
+    name: Date
+    request: DATE_()
+    filters:
+      - lambda: |-
+          std::string str{x};
+          str.erase(0,2); 
+          str.insert(6,"20");
+          return str;
+```
 
 ## 8. Примеры готовых конфигураций
 
@@ -518,11 +530,128 @@ api:
   password: !secret api_password
 
 ota:
+  platform: esphome
   password: !secret ota_password
 
 ```
 
 </details>
+
+<details><summary>Для однофазного счетчика CE207 СПОДЭС</summary>
+
+```
+esphome:
+  name: energomera-ce207-esp32
+  friendly_name: Energomera-ce207-esp32
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+api:
+  password: !secret api_password
+
+ota:
+  platform: esphome
+  password: !secret ota_password
+
+external_components:
+  - source: github://latonita/esphome-energomera-iec
+    refresh: 30s
+    components: [energomera_iec]
+
+uart:
+  rx_pin: GPIO16
+  tx_pin: GPIO17
+  baud_rate: 9600
+  data_bits: 7
+  parity: EVEN
+  stop_bits: 1 
+
+energomera_iec:
+  id: ce207
+
+sensor:
+  - platform: energomera_iec
+    request: EMD01(0.0,3)
+    index: 1
+    sub_index: 2
+    name: Электроэнергия
+    unit_of_measurement: kWh
+    accuracy_decimals: 3
+    device_class: energy
+    state_class: total_increasing
+
+  - platform: energomera_iec
+    name: Ток
+    request: CURRE()
+    unit_of_measurement: A
+    accuracy_decimals: 2
+    device_class: current
+    state_class: measurement
+
+  - platform: energomera_iec
+    name: Напряжение
+    request: VOLTA()
+    unit_of_measurement: V
+    accuracy_decimals: 1
+    device_class: voltage
+    state_class: measurement
+
+  - platform: energomera_iec
+    name: Частота
+    request: FREQU()
+    unit_of_measurement: Hz
+    accuracy_decimals: 2
+    device_class: frequency
+    state_class: measurement
+
+  - platform: energomera_iec
+    name: Коэффициент мощности
+    request: COS_f()
+    unit_of_measurement: "%"
+    accuracy_decimals: 2
+    device_class: power_factor
+    state_class: measurement
+
+  - platform: energomera_iec
+    name: Активная мощность
+    request: POWEP()
+    unit_of_measurement: kW
+    accuracy_decimals: 3
+    device_class: power
+    state_class: measurement
+
+text_sensor:
+  - platform: energomera_iec
+    name: Заводской номер
+    request: SNUMB()
+    entity_category: diagnostic
+
+  - platform: energomera_iec
+    name: Время
+    request: TIME_()
+    entity_category: diagnostic
+
+  - platform: energomera_iec
+    name: Дата
+    request: DATE_()
+    entity_category: diagnostic
+    filters:
+      - lambda: |-
+          std::string str{x};
+          str.erase(0,2);
+          str.insert(6,"20");
+          return str;
+```
+ 
+</details>
+
 
 ## 9. Проблемы, особенности, рекомендации
 - "да должно всё работать" :)
