@@ -172,13 +172,8 @@ void EnergomeraIecComponent::loop() {
   if (!this->is_ready() || this->state_ == State::NOT_INITIALIZED)
     return;
 
-  // in-loop static variables
-
-  static uint32_t session_started_ms{0};                       // start of session
-  static auto request_iter = this->sensors_.end();             // talking to meter
-  static auto sensor_iter = this->sensors_.end();              // publishing sensor values
-  static ValueRefsArray vals;                                  // values from brackets, refs to this->buffers_.in
-  static char *in_param_ptr = (char *) &this->buffers_.in[1];  // ref to second byte, first is STX/SOH in R1 requests
+  ValueRefsArray vals;                                  // values from brackets, refs to this->buffers_.in
+  char *in_param_ptr = (char *) &this->buffers_.in[1];  // ref to second byte, first is STX/SOH in R1 requests
 
   switch (this->state_) {
     case State::IDLE: {
