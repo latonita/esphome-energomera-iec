@@ -167,6 +167,12 @@ class EnergomeraIecComponent : public PollingComponent, public uart::UARTDevice 
   } stats_;
 
   uint8_t failures_before_reboot_{0};
+
+  struct LoopState {
+    uint32_t session_started_ms{0};             // start of session
+    SensorMap::iterator request_iter{nullptr};  // talking to meter
+    SensorMap::iterator sensor_iter{nullptr};   // publishing sensor values
+  } loop_state_;
 };
 
 }  // namespace energomera_iec

@@ -170,27 +170,27 @@ void EnergomeraIecComponent::loop() {
   if (!this->is_ready() || this->state_ == State::NOT_INITIALIZED)
     return;
 
-  // in-loop static variables
-  static uint32_t session_started_ms{0};                       // start of session
-  static auto request_iter = this->sensors_.end();             // talking to meter
-  static auto sensor_iter = this->sensors_.end();              // publishing sensor values
-  static ValueRefsArray vals;                                  // values from brackets, refs to this->buffers_.in
-  static char *in_param_ptr = (char *) &this->buffers_.in[1];  // ref to second byte, first is STX/SOH in R1 requests
+  // // in-loop static variables
+  // static uint32_t session_started_ms{0};                       // start of session
+  // static auto request_iter = this->sensors_.end();             // talking to meter
+  // static auto sensor_iter = this->sensors_.end();              // publishing sensor values
+  ValueRefsArray vals;                                  // values from brackets, refs to this->buffers_.in
+  char *in_param_ptr = (char *) &this->buffers_.in[1];  // ref to second byte, first is STX/SOH in R1 requests
 
   switch (this->state_) {
     case State::IDLE: {
       this->update_last_rx_time_();
-      auto request = this->single_requests_.front();
+      // auto request = this->single_requests_.front();
 
-      if (this->single_requests_.empty())
-        break;
+      // if (this->single_requests_.empty())
+      //   break;
 
-      this->single_requests_.pop_front();
-      ESP_LOGD(TAG, "Performing single request '%s'", request.c_str());
-      this->prepare_non_session_prog_frame_(request.c_str());
-      this->send_frame_prepared_();
-      auto read_fn = [this]() { return this->receive_prog_frame_(STX, true); };
-      this->read_reply_and_go_next_state_(read_fn, State::SINGLE_READ_ACK, 3, false, true);
+      // this->single_requests_.pop_front();
+      // ESP_LOGD(TAG, "Performing single request '%s'", request.c_str());
+      // this->prepare_non_session_prog_frame_(request.c_str());
+      // this->send_frame_prepared_();
+      // auto read_fn = [this]() { return this->receive_prog_frame_(STX, true); };
+      // this->read_reply_and_go_next_state_(read_fn, State::SINGLE_READ_ACK, 3, false, true);
 
     } break;
 
@@ -272,7 +272,7 @@ void EnergomeraIecComponent::loop() {
 
     case State::OPEN_SESSION: {
       this->stats_.connections_tried_++;
-      session_started_ms = millis();
+      this->loop_state_.session_started_ms = millis();
       this->log_state_();
 
       this->clear_rx_buffers_();
@@ -283,7 +283,7 @@ void EnergomeraIecComponent::loop() {
 
       uint8_t open_cmd[32]{0};
       uint8_t open_cmd_len = snprintf((char *) open_cmd, 32, "/?%s!\r\n", this->meter_address_.c_str());
-      request_iter = this->sensors_.begin();
+      this->loop_state_.request_iter = this->sensors_.begin();
       this->send_frame_(open_cmd, open_cmd_len);
       this->set_next_state_(State::OPEN_SESSION_GET_ID);
       auto read_fn = [this]() { return this->receive_frame_ascii_(); };
@@ -351,12 +351,12 @@ void EnergomeraIecComponent::loop() {
 
     case State::DATA_ENQ:
       this->log_state_();
-      if (request_iter == this->sensors_.end()) {
+      if (this->loop_state_.request_iter == this->sensors_.end()) {
         ESP_LOGD(TAG, "All requests done");
         this->set_next_state_(State::CLOSE_SESSION);
         break;
       } else {
-        auto req = request_iter->first;
+        auto req = this->loop_state_.request_iter->first;
         ESP_LOGD(TAG, "Requesting data for '%s'", req.c_str());
         this->prepare_prog_frame_(req.c_str());
         this->send_frame_prepared_();
@@ -376,7 +376,7 @@ void EnergomeraIecComponent::loop() {
         return;
       }
 
-      auto req = request_iter->first;
+      auto req = this->loop_state_.request_iter->first;
 
       uint8_t brackets_found = get_values_from_brackets_(in_param_ptr, vals);
       if (!brackets_found) {
@@ -400,7 +400,7 @@ void EnergomeraIecComponent::loop() {
         return;
       }
 
-      if (request_iter->second->get_function() != in_param_ptr) {
+      if (this->loop_state_.request_iter->second->get_function() != in_param_ptr) {
         ESP_LOGE(TAG, "Returned data name mismatch. Skipping frame");
         return;
       }
@@ -414,8 +414,8 @@ void EnergomeraIecComponent::loop() {
 
     case State::DATA_NEXT:
       this->log_state_();
-      request_iter = this->sensors_.upper_bound(request_iter->first);
-      if (request_iter != this->sensors_.end()) {
+      this->loop_state_.request_iter = this->sensors_.upper_bound(this->loop_state_.request_iter->first);
+      if (this->loop_state_.request_iter != this->sensors_.end()) {
         this->set_next_state_delayed_(this->delay_between_requests_ms_, State::DATA_ENQ);
       } else {
         this->set_next_state_delayed_(this->delay_between_requests_ms_, State::CLOSE_SESSION);
@@ -427,8 +427,8 @@ void EnergomeraIecComponent::loop() {
       ESP_LOGD(TAG, "Closing session");
       this->send_frame_(CMD_CLOSE_SESSION, sizeof(CMD_CLOSE_SESSION));
       this->set_next_state_(State::PUBLISH);
-      ESP_LOGD(TAG, "Total connection time: %u ms", millis() - session_started_ms);
-      sensor_iter = this->sensors_.begin();
+      ESP_LOGD(TAG, "Total connection time: %u ms", millis() - this->loop_state_.session_started_ms);
+      this->loop_state_.sensor_iter = this->sensors_.begin();
       break;
 
     case State::PUBLISH:
@@ -436,9 +436,9 @@ void EnergomeraIecComponent::loop() {
       ESP_LOGD(TAG, "Publishing data");
       this->update_last_rx_time_();
 
-      if (sensor_iter != this->sensors_.end()) {
-        sensor_iter->second->publish();
-        sensor_iter++;
+      if (this->loop_state_.sensor_iter != this->sensors_.end()) {
+        this->loop_state_.sensor_iter->second->publish();
+        this->loop_state_.sensor_iter++;
       } else {
         this->stats_.dump();
         if (this->crc_errors_per_session_sensor_ != nullptr) {
