@@ -173,8 +173,12 @@ void EnergomeraIecComponent::loop() {
     return;
 
   // in-loop static variables
-  ValueRefsArray vals;                                  // values from brackets, refs to this->buffers_.in
-  char *in_param_ptr = (char *) &this->buffers_.in[1];  // ref to second byte, first is STX/SOH in R1 requests
+
+  static uint32_t session_started_ms{0};                       // start of session
+  static auto request_iter = this->sensors_.end();             // talking to meter
+  static auto sensor_iter = this->sensors_.end();              // publishing sensor values
+  static ValueRefsArray vals;                                  // values from brackets, refs to this->buffers_.in
+  static char *in_param_ptr = (char *) &this->buffers_.in[1];  // ref to second byte, first is STX/SOH in R1 requests
 
   switch (this->state_) {
     case State::IDLE: {
@@ -499,13 +503,28 @@ bool EnergomeraIecComponent::set_sensor_value_(EnergomeraIecSensorBase *sensor, 
     ESP_LOGE(TAG, "Invalid sensor index %u", idx);
     return false;
   }
+  char str_buffer[128] = {'\0'};
+  strncpy(str_buffer, vals[idx], 128);
 
-  const char *str = vals[idx];
-  ESP_LOGD(TAG, "Setting value for sensor '%s' to '%s', idx = %d", sensor->get_request().c_str(), str, idx + 1);
+  char *str = str_buffer;
+  uint8_t sub_idx = sensor->get_sub_index();
+  if (sub_idx == 0) {
+    ESP_LOGD(TAG, "Setting value for sensor '%s', idx = %d to '%s'", sensor->get_request().c_str(), idx + 1, str);
+  } else {
+    ESP_LOGD(TAG, "Extracting value for sensor '%s', idx = %d, sub_idx = %d from '%s'", sensor->get_request().c_str(),
+             idx + 1, sub_idx, str);
+    str = this->get_nth_value_from_csv_(str, sub_idx);
+    if (str == nullptr) {
+      ESP_LOGE(TAG, "Cannot extract sensor value by sub-index %d. Is data comma-separated? Also note that sub-index starts from 1", sub_idx);
+      str_buffer[0] = '\0';
+      str = str_buffer;
+    }
+    ESP_LOGD(TAG, "Setting value using sub-index = %d, extracted sensor value is '%s'", sub_idx, str);
+  }
 
   if (type == SensorType::SENSOR) {
     float f = 0;
-    ret = vals[idx][0] && char2float(str, f);
+    ret = str && str[0] && char2float(str, f);
     if (ret) {
       static_cast<EnergomeraIecSensor *>(sensor)->set_value(f);
     } else {
@@ -753,6 +772,24 @@ uint8_t EnergomeraIecComponent::get_values_from_brackets_(char *line, ValueRefsA
     p++;
   }
   return idx;  // at least one bracket found
+}
+
+// Get N-th value from comma-separated string, 1-based index
+// line = "20.08.24,0.45991"
+// get_nth_value_from_csv_(line, 1) -> "20.08.24"
+// get_nth_value_from_csv_(line, 2) -> "0.45991"
+char *EnergomeraIecComponent::get_nth_value_from_csv_(char *line, uint8_t idx) {
+  if (idx == 0) {
+    return line;
+  }
+  char *ptr;
+  ptr = strtok(line, ",");
+  while (ptr != nullptr) {
+    if (idx-- == 1)
+      return ptr;
+    ptr = strtok(nullptr, ",");
+  }
+  return nullptr;
 }
 
 const char *EnergomeraIecComponent::state_to_string(State state) {

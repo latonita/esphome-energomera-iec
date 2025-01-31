@@ -1,4 +1,4 @@
-# ESPHome компонент для подключения счетчиков электроэнергии Энергомера CE102M CE301 CE303 CE308 по RS-485 (ГОСТ IEC 61107-2011)
+# ESPHome компонент для подключения счетчиков электроэнергии Энергомера CE102M CE207 CE208 CE301 CE303 CE307 CE308 по RS-485 (ГОСТ МЭК/IEC 61107-2011)
 
 * [1. Назначение](#1-назначение)
 * [2. Отказ от ответственности](#2-отказ-от-ответственности)
@@ -12,7 +12,8 @@
 
 ## 1. Назначение
 Компонент для считывания данных с электросчетчиков, поддерживающих протокол МЭК/IEC 61107, таких как Энергомера СЕ102М, СЕ301, СЕ303. 
-Потенциально может работать и сдругими счетчиками поддерживающими данный ГОСТ.
+Потенциально, может работать и сдругими счетчиками поддерживающими данный ГОСТ. Кроме того, работает и с некоторыми счетчиками Энергомера,
+заявленными как СПОДЭС (SPds в названии - например *CE207-R7.849.2.OA SPds*). Проверено на нескольких CE207, СЕ208, СЕ307, СЕ308.
 
 ## 2. Отказ от ответственности
 Пользуясь данным ПО пользователь полностью берет на себя всю ответственность за любые последствия.
@@ -143,22 +144,31 @@ sensor/text_sensor:
     # energomera_iec_id: ce102m   # обязательно, если несколько счетчиков
     name: Название сенсора
     request: ЗАПРОС()
-    index: индекс ответа
+    index: индекс ответа, по-умолчанию 1
+    sub_index: суб-индекс внутри ответа, по-умолчанию 0 = весь ответ из скобок
     ... остальные стандартные параметры для сенсора ...
 ```
 
-Названия функций для запроса берем из документации на счетчик. Усли запрос возвращает несколько значений, то, по-умолчанию, берется первое, но можно выбрать указав номер ответа (индекс, начинается с 1).
+Названия функций для запроса берем из документации на счетчик. Если запрос возвращает несколько значений, то, по-умолчанию, берется первое, но можно выбрать указав номер ответа (индекс, начинается с 1). Если в скобках указано несколько значений через запятую, то
+можно указать какое именно брать (суб-индекс, начинается с 1).
 Примеры запросов и ответов от счетчика:
-| Счетчик | Запрос | Ответ счетчика | Индекс | Результат |
-|--|--|--|--|--|
-| CE102M    | `VOLTA()` | `VOLTA(228.93)`| не указан | 228.93 |
-| CE301/303 | `VOLTA()` | `VOLTA(228.93)VOLTA(230.02)VOLTA(235.12)` | не указан | 228.93 |
-| CE301/303 | `VOLTA()` | `VOLTA(228.93)VOLTA(230.02)VOLTA(235.12)` | 1 | 228.93 |
-| CE301/303 | `VOLTA()` | `VOLTA(228.93)VOLTA(230.02)VOLTA(235.12)` | 2 | 230.02 |
-| *         | `ET0PE()` | `ET0PE(34261.8262567)(25179.1846554)(9082.6416013)(0.0)(0.0)(0.0)` | 2 | 25179.1846554 |
+| Счетчик | Запрос | Ответ счетчика | Индекс | Суб-индекс | Результат |
+|--|--|--|--|--|--|
+| CE102M    | `VOLTA()` | `VOLTA(228.93)`| не указан | не указан | 228.93 |
+| CE301/303 | `VOLTA()` | `VOLTA(228.93)VOLTA(230.02)VOLTA(235.12)` | не указан | не указан | 228.93 |
+| CE301/303 | `VOLTA()` | `VOLTA(228.93)VOLTA(230.02)VOLTA(235.12)` | 1 | не указан | 228.93 |
+| CE301/303 | `VOLTA()` | `VOLTA(228.93)VOLTA(230.02)VOLTA(235.12)` | 2 | не указан | 230.02 |
+| *, кроме СПОДЭС         | `ET0PE()` | `ET0PE(34261.8262567)(25179.1846554)(9082.6416013)(0.0)(0.0)(0.0)` | 2 | не указан | 25179.1846554 |
+| CE307/308 | `EMD01(0.0,1)` | `EMD01(20.08.24,0.45991)(0.41342)` | 1 | 2 | 0.45991 |
+| CE307/308 | `EMD01(0.0,1)` | `EMD01(20.08.24,0.45991)(0.41342)` | 2 | не указан | 0.41342 |
 
 Запросы берем из руководств на счетчики. Например, [Руководство по эксплуатации CE102M](http://sp.energomera.ru/documentations/product/ce102m_re_full.pdf) , или 
 [Руководство пользователя CE301 и CE303](http://sp.energomera.ru/documentations/product/ce301_303_rp.pdf).
+
+Кроме того, оказалось, что некоторые СПОДЭС счетчики Энергомера (например, 307 и 308, и, возможно, также 207 и 208) тоже уверенно
+отвечают на запросы по стандарту МЭК, но с некоторыми особенностями. Например, там не работает команда `ET0PE` для получения накопленной
+энергии. Вместо этого можно использовать команды работы с архивом `EMDzz/ENDzz` и аналогичные. 
+[Документация по командам CE208 и CE308](doc/ce208_ce308_iec_protocol.pdf), взятая с форума поддержки Энергомеры.
 
 ### 7.1 Пример. Запрос потребления электроэнергии в кВт*ч
 ```yaml
@@ -183,6 +193,7 @@ sensor:
 ```
 ### 7.2 Пример. Запрос даты
 Дату счетчик возвращает в формате `нн.дд.мм.гг`, где - день недели 00 - воскресенье, 01 понедельник. 
+Пример: `03.13.07.24`.
 Превратить это в нормальную дату можно, например,так:
 ```yaml
 text_sensor:
@@ -193,6 +204,20 @@ text_sensor:
       - lambda: |-
           std::string str{x};
           str.erase(0,3);
+          str.insert(6,"20");
+          return str;
+```
+Некоторые счетчики (например, СЕ207) дату возвращают в формате `н.дд.мм.гг`, например `3.11.09.24`. 
+Поэтому в lambda выражении надо поправить удаление лишних символов: `str.erase(0,2);`:
+```
+text_sensor:
+  - platform: energomera_iec
+    name: Date
+    request: DATE_()
+    filters:
+      - lambda: |-
+          std::string str{x};
+          str.erase(0,2); 
           str.insert(6,"20");
           return str;
 ```
@@ -242,6 +267,9 @@ sensor:
 ```
 
 ## 8. Примеры готовых конфигураций
+Важный момент - в примерах имена сенсоров указаны на русском языке для лучшего понимания. При компиляции Esphome заменяет все не-латинские символы на `_`.
+И если попадутся два сенсора с одинаковыми названиями с учетом замен - то Home Assistant будет смешивать их данные.
+**Крайне рекомендую в yaml писать на английском/латинице, а уже в HASS переименовывать на русский**.
 
 <details><summary>Для однофазного счетчика CE102M</summary>
 
@@ -568,11 +596,128 @@ api:
   password: !secret api_password
 
 ota:
+  platform: esphome
   password: !secret ota_password
 
 ```
 
 </details>
+
+<details><summary>Для однофазного счетчика CE207 СПОДЭС</summary>
+
+```
+esphome:
+  name: energomera-ce207-esp32
+  friendly_name: Energomera-ce207-esp32
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+api:
+  password: !secret api_password
+
+ota:
+  platform: esphome
+  password: !secret ota_password
+
+external_components:
+  - source: github://latonita/esphome-energomera-iec
+    refresh: 30s
+    components: [energomera_iec]
+
+uart:
+  rx_pin: GPIO16
+  tx_pin: GPIO17
+  baud_rate: 9600
+  data_bits: 7
+  parity: EVEN
+  stop_bits: 1 
+
+energomera_iec:
+  id: ce207
+
+sensor:
+  - platform: energomera_iec
+    request: EMD01(0.0,3)
+    index: 1
+    sub_index: 2
+    name: Электроэнергия
+    unit_of_measurement: kWh
+    accuracy_decimals: 3
+    device_class: energy
+    state_class: total_increasing
+
+  - platform: energomera_iec
+    name: Ток
+    request: CURRE()
+    unit_of_measurement: A
+    accuracy_decimals: 2
+    device_class: current
+    state_class: measurement
+
+  - platform: energomera_iec
+    name: Напряжение
+    request: VOLTA()
+    unit_of_measurement: V
+    accuracy_decimals: 1
+    device_class: voltage
+    state_class: measurement
+
+  - platform: energomera_iec
+    name: Частота
+    request: FREQU()
+    unit_of_measurement: Hz
+    accuracy_decimals: 2
+    device_class: frequency
+    state_class: measurement
+
+  - platform: energomera_iec
+    name: Коэффициент мощности
+    request: COS_f()
+    unit_of_measurement: "%"
+    accuracy_decimals: 2
+    device_class: power_factor
+    state_class: measurement
+
+  - platform: energomera_iec
+    name: Активная мощность
+    request: POWEP()
+    unit_of_measurement: kW
+    accuracy_decimals: 3
+    device_class: power
+    state_class: measurement
+
+text_sensor:
+  - platform: energomera_iec
+    name: Заводской номер
+    request: SNUMB()
+    entity_category: diagnostic
+
+  - platform: energomera_iec
+    name: Время
+    request: TIME_()
+    entity_category: diagnostic
+
+  - platform: energomera_iec
+    name: Дата
+    request: DATE_()
+    entity_category: diagnostic
+    filters:
+      - lambda: |-
+          std::string str{x};
+          str.erase(0,2);
+          str.insert(6,"20");
+          return str;
+```
+ 
+</details>
+
 
 ## 9. Проблемы, особенности, рекомендации
 - "да должно всё работать" :)

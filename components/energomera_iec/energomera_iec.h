@@ -22,7 +22,7 @@ static const size_t MAX_IN_BUF_SIZE = 256;
 static const size_t MAX_OUT_BUF_SIZE = 84;
 
 const uint8_t VAL_NUM = 12;
-using ValueRefsArray = std::array<const char *, VAL_NUM>;
+using ValueRefsArray = std::array<char *, VAL_NUM>;
 
 using SensorMap = std::multimap<std::string, EnergomeraIecSensorBase *>;
 using SingleRequests = std::list<std::string>;
@@ -148,6 +148,7 @@ class EnergomeraIecComponent : public PollingComponent, public uart::UARTDevice 
 
   char *extract_meter_id_(size_t frame_size);
   uint8_t get_values_from_brackets_(char *line, ValueRefsArray &vals);
+  char *get_nth_value_from_csv_(char *line, uint8_t idx);
   bool set_sensor_value_(EnergomeraIecSensorBase *sensor, ValueRefsArray &vals);
 
   void report_failure(bool failure);

@@ -38,6 +38,9 @@ class EnergomeraIecSensorBase {
 
   void set_index(const uint8_t idx) { idx_ = idx; };
   uint8_t get_index() const { return idx_; };
+  
+  void set_sub_index(const uint8_t sub_idx) { sub_idx_ = sub_idx; };
+  uint8_t get_sub_index() const { return sub_idx_; };
 
   void reset() {
     has_value_ = false;
@@ -59,6 +62,7 @@ class EnergomeraIecSensorBase {
   std::string request_;
   std::string function_;
   uint8_t idx_{1};
+  uint8_t sub_idx_{0};
   bool has_value_;
   uint8_t tries_{0};
 };
