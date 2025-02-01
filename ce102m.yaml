@@ -42,7 +42,7 @@ sensor:
   - platform: energomera_iec
     request: ET0PE()
     index: 1
-    name: Электроэнергия
+    name: Energy
     unit_of_measurement: kWh
     accuracy_decimals: 3
     device_class: energy
@@ -51,7 +51,7 @@ sensor:
   - platform: energomera_iec
     request: ET0PE()
     index: 2
-    name: Электроэнергия T1
+    name: Energy T1
     unit_of_measurement: kWh
     accuracy_decimals: 3
     device_class: energy
@@ -60,14 +60,14 @@ sensor:
   - platform: energomera_iec
     request: ET0PE()
     index: 3
-    name: Электроэнергия T2
+    name: Energy T2
     unit_of_measurement: kWh
     accuracy_decimals: 3
     device_class: energy
     state_class: total_increasing
 
   - platform: energomera_iec
-    name: Ток
+    name: Current
     request: CURRE()
     unit_of_measurement: A
     accuracy_decimals: 2
@@ -75,7 +75,7 @@ sensor:
     state_class: measurement
 
   - platform: energomera_iec
-    name: Напряжение
+    name: Voltage
     request: VOLTA()
     unit_of_measurement: V
     accuracy_decimals: 1
@@ -83,7 +83,7 @@ sensor:
     state_class: measurement
 
   - platform: energomera_iec
-    name: Частота
+    name: Frequency
     request: FREQU()
     unit_of_measurement: Hz
     accuracy_decimals: 2
@@ -91,7 +91,7 @@ sensor:
     state_class: measurement
 
   - platform: energomera_iec
-    name: Коэффициент мощности
+    name: Power Factor
     request: COS_f()
     unit_of_measurement: "%"
     accuracy_decimals: 2
@@ -99,7 +99,7 @@ sensor:
     state_class: measurement
 
   - platform: energomera_iec
-    name: Активная мощность
+    name: Active Power
     request: POWEP()
     unit_of_measurement: kW
     accuracy_decimals: 3
@@ -108,17 +108,17 @@ sensor:
 
 text_sensor:
   - platform: energomera_iec
-    name: Заводской номер
+    name: Serial Number
     request: SNUMB()
     entity_category: diagnostic
 
   - platform: energomera_iec
-    name: Время
+    name: Time
     request: TIME_()
     entity_category: diagnostic
 
   - platform: energomera_iec
-    name: Дата
+    name: Date
     request: DATE_()
     entity_category: diagnostic
     filters:

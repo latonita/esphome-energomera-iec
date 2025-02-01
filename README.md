@@ -312,7 +312,7 @@ sensor:
   - platform: energomera_iec
     request: ET0PE()
     index: 1
-    name: Электроэнергия
+    name: Energy
     unit_of_measurement: kWh
     accuracy_decimals: 3
     device_class: energy
@@ -321,7 +321,7 @@ sensor:
   - platform: energomera_iec
     request: ET0PE()
     index: 2
-    name: Электроэнергия T1
+    name: Energy T1
     unit_of_measurement: kWh
     accuracy_decimals: 3
     device_class: energy
@@ -330,14 +330,14 @@ sensor:
   - platform: energomera_iec
     request: ET0PE()
     index: 3
-    name: Электроэнергия T2
+    name: Energy T2
     unit_of_measurement: kWh
     accuracy_decimals: 3
     device_class: energy
     state_class: total_increasing
 
   - platform: energomera_iec
-    name: Ток
+    name: Current
     request: CURRE()
     unit_of_measurement: A
     accuracy_decimals: 2
@@ -345,7 +345,7 @@ sensor:
     state_class: measurement
 
   - platform: energomera_iec
-    name: Напряжение
+    name: Voltage
     request: VOLTA()
     unit_of_measurement: V
     accuracy_decimals: 1
@@ -353,7 +353,7 @@ sensor:
     state_class: measurement
 
   - platform: energomera_iec
-    name: Частота
+    name: Frequency
     request: FREQU()
     unit_of_measurement: Hz
     accuracy_decimals: 2
@@ -361,7 +361,7 @@ sensor:
     state_class: measurement
 
   - platform: energomera_iec
-    name: Коэффициент мощности
+    name: Power Factor
     request: COS_f()
     unit_of_measurement: "%"
     accuracy_decimals: 2
@@ -369,7 +369,7 @@ sensor:
     state_class: measurement
 
   - platform: energomera_iec
-    name: Активная мощность
+    name: Active Power
     request: POWEP()
     unit_of_measurement: kW
     accuracy_decimals: 3
@@ -378,17 +378,17 @@ sensor:
 
 text_sensor:
   - platform: energomera_iec
-    name: Заводской номер
+    name: Serial Number
     request: SNUMB()
     entity_category: diagnostic
 
   - platform: energomera_iec
-    name: Время
+    name: Time
     request: TIME_()
     entity_category: diagnostic
 
   - platform: energomera_iec
-    name: Дата
+    name: Date
     request: DATE_()
     entity_category: diagnostic
     filters:
@@ -453,7 +453,7 @@ sensor:
   - platform: energomera_iec
     request: ET0PE()
     index: 1
-    name: Электроэнергия
+    name: Energy
     unit_of_measurement: kWh
     accuracy_decimals: 3
     device_class: energy
@@ -462,7 +462,7 @@ sensor:
   - platform: energomera_iec
     request: ET0PE()
     index: 2
-    name: Электроэнергия T1
+    name: Energy T1
     unit_of_measurement: kWh
     accuracy_decimals: 3
     device_class: energy
@@ -471,14 +471,14 @@ sensor:
   - platform: energomera_iec
     request: ET0PE()
     index: 3
-    name: Электроэнергия T2
+    name: Energy T2
     unit_of_measurement: kWh
     accuracy_decimals: 3
     device_class: energy
     state_class: total_increasing
 
   - platform: energomera_iec
-    name: Ток фаза A
+    name: Current Phase A
     request: CURRE()
     index: 1
     unit_of_measurement: A
@@ -487,7 +487,7 @@ sensor:
     state_class: measurement
 
   - platform: energomera_iec
-    name: Ток фаза B
+    name: Current Phase B
     request: CURRE()
     index: 2
     unit_of_measurement: A
@@ -496,7 +496,7 @@ sensor:
     state_class: measurement
 
   - platform: energomera_iec
-    name: Ток фаза C
+    name: Current Phase C
     request: CURRE()
     index: 3
     unit_of_measurement: A
@@ -505,7 +505,7 @@ sensor:
     state_class: measurement
 
   - platform: energomera_iec
-    name: Напряжение фаза A
+    name: Voltage Phase A
     request: VOLTA()
     index: 1
     unit_of_measurement: V
@@ -514,7 +514,7 @@ sensor:
     state_class: measurement
 
   - platform: energomera_iec
-    name: Напряжение фаза B
+    name: Voltage Phase B
     request: VOLTA()
     index: 2
     unit_of_measurement: V
@@ -523,7 +523,7 @@ sensor:
     state_class: measurement
 
   - platform: energomera_iec
-    name: Напряжение фаза C
+    name: Voltage Phase C
     request: VOLTA()
     index: 3
     unit_of_measurement: V
@@ -532,7 +532,7 @@ sensor:
     state_class: measurement
 
   - platform: energomera_iec
-    name: Активная мощность
+    name: Active Power
     request: POWEP()
     index: 1
     unit_of_measurement: kW
@@ -541,7 +541,7 @@ sensor:
     state_class: measurement
 
   - platform: energomera_iec
-    name: Активная мощность фаза A
+    name: Active Power Phase A
     request: POWPP()
     unit_of_measurement: kW
     accuracy_decimals: 3
@@ -550,7 +550,7 @@ sensor:
     state_class: measurement
 
   - platform: energomera_iec
-    name: Активная мощность фаза B
+    name: Active Power Phase B
     request: POWPP()
     unit_of_measurement: kW
     accuracy_decimals: 3
@@ -559,7 +559,7 @@ sensor:
     state_class: measurement
 
   - platform: energomera_iec
-    name: Активная мощность фаза C
+    name: Active Power Phase C
     request: POWPP()
     unit_of_measurement: kW
     accuracy_decimals: 3
@@ -569,17 +569,17 @@ sensor:
 
 text_sensor:
   - platform: energomera_iec
-    name: Заводской номер
+    name: Serial Number
     request: SNUMB()
     entity_category: diagnostic
 
   - platform: energomera_iec
-    name: Время
+    name: Time
     request: TIME_()
     entity_category: diagnostic
 
   - platform: energomera_iec
-    name: Дата
+    name: Date
     request: DATE_()
     entity_category: diagnostic
     filters:
@@ -606,7 +606,7 @@ ota:
 
 <details><summary>Для однофазного счетчика CE207 СПОДЭС</summary>
 
-```
+```yaml
 esphome:
   name: energomera-ce207-esp32
   friendly_name: Energomera-ce207-esp32
@@ -648,14 +648,14 @@ sensor:
     request: EMD01(0.0,3)
     index: 1
     sub_index: 2
-    name: Электроэнергия
+    name: Energy
     unit_of_measurement: kWh
     accuracy_decimals: 3
     device_class: energy
     state_class: total_increasing
 
   - platform: energomera_iec
-    name: Ток
+    name: Current
     request: CURRE()
     unit_of_measurement: A
     accuracy_decimals: 2
@@ -663,7 +663,7 @@ sensor:
     state_class: measurement
 
   - platform: energomera_iec
-    name: Напряжение
+    name: Voltage
     request: VOLTA()
     unit_of_measurement: V
     accuracy_decimals: 1
@@ -671,7 +671,7 @@ sensor:
     state_class: measurement
 
   - platform: energomera_iec
-    name: Частота
+    name: Frequency
     request: FREQU()
     unit_of_measurement: Hz
     accuracy_decimals: 2
@@ -679,7 +679,7 @@ sensor:
     state_class: measurement
 
   - platform: energomera_iec
-    name: Коэффициент мощности
+    name: Power Factor
     request: COS_f()
     unit_of_measurement: "%"
     accuracy_decimals: 2
@@ -687,7 +687,7 @@ sensor:
     state_class: measurement
 
   - platform: energomera_iec
-    name: Активная мощность
+    name: Active Power
     request: POWEP()
     unit_of_measurement: kW
     accuracy_decimals: 3
@@ -696,17 +696,17 @@ sensor:
 
 text_sensor:
   - platform: energomera_iec
-    name: Заводской номер
+    name: Serial Number
     request: SNUMB()
     entity_category: diagnostic
 
   - platform: energomera_iec
-    name: Время
+    name: Time
     request: TIME_()
     entity_category: diagnostic
 
   - platform: energomera_iec
-    name: Дата
+    name: Date
     request: DATE_()
     entity_category: diagnostic
     filters:
@@ -715,8 +715,8 @@ text_sensor:
           str.erase(0,2);
           str.insert(6,"20");
           return str;
-```
- 
+ ```
+
 </details>
 
 
