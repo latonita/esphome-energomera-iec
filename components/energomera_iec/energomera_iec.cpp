@@ -7,7 +7,8 @@
 namespace esphome {
 namespace energomera_iec {
 
-static const char *TAG = "energomera_iec";
+static const char *TAG0 = "energomera_iec_";
+#define TAG (this->tag_.c_str())
 
 static constexpr uint8_t SOH = 0x01;
 static constexpr uint8_t STX = 0x02;
@@ -128,7 +129,8 @@ void EnergomeraIecComponent::setup() {
 }
 
 void EnergomeraIecComponent::dump_config() {
-  ESP_LOGCONFIG(TAG, "Energomera IEC:");
+  ESP_LOGCONFIG(TAG, "Energomera IEC: %p", this);
+
   LOG_UPDATE_INTERVAL(this);
   LOG_PIN("  Flow Control Pin: ", this->flow_control_pin_);
   ESP_LOGCONFIG(TAG, "  Receive Timeout: %ums", this->receive_timeout_ms_);
@@ -146,8 +148,9 @@ void EnergomeraIecComponent::register_sensor(EnergomeraIecSensorBase *sensor) {
 
 void EnergomeraIecComponent::abort_mission_() {
   // try close connection ?
-  ESP_LOGE(TAG, "Closing session");
+  ESP_LOGE(TAG, "Abort mission. Closing session");
   this->send_frame_(CMD_CLOSE_SESSION, sizeof(CMD_CLOSE_SESSION));
+  this->unlock_uart_session_();
   this->set_next_state_(State::IDLE);
   this->report_failure(true);
 }
@@ -170,10 +173,6 @@ void EnergomeraIecComponent::loop() {
   if (!this->is_ready() || this->state_ == State::NOT_INITIALIZED)
     return;
 
-  // // in-loop static variables
-  // static uint32_t session_started_ms{0};                       // start of session
-  // static auto request_iter = this->sensors_.end();             // talking to meter
-  // static auto sensor_iter = this->sensors_.end();              // publishing sensor values
   ValueRefsArray vals;                                  // values from brackets, refs to this->buffers_.in
   char *in_param_ptr = (char *) &this->buffers_.in[1];  // ref to second byte, first is STX/SOH in R1 requests
 
@@ -192,6 +191,16 @@ void EnergomeraIecComponent::loop() {
       // auto read_fn = [this]() { return this->receive_prog_frame_(STX, true); };
       // this->read_reply_and_go_next_state_(read_fn, State::SINGLE_READ_ACK, 3, false, true);
 
+    } break;
+
+    case State::TRY_LOCK_BUS: {
+      this->log_state_();
+      if (this->try_lock_uart_session_()) {
+        this->set_next_state_(State::OPEN_SESSION);
+      } else {
+        ESP_LOGV(TAG, "UART Bus is busy, waiting ...");
+        this->set_next_state_delayed_(1000, State::TRY_LOCK_BUS);
+      }
     } break;
 
     case State::WAIT:
@@ -440,11 +449,12 @@ void EnergomeraIecComponent::loop() {
         this->loop_state_.sensor_iter->second->publish();
         this->loop_state_.sensor_iter++;
       } else {
-        this->stats_.dump();
+        this->stats_dump_();
         if (this->crc_errors_per_session_sensor_ != nullptr) {
           this->crc_errors_per_session_sensor_->publish_state(this->stats_.crc_errors_per_session());
         }
         this->report_failure(false);
+        this->unlock_uart_session_();
         this->set_next_state_(State::IDLE);
       }
       break;
@@ -470,7 +480,7 @@ void EnergomeraIecComponent::update() {
     return;
   }
   ESP_LOGD(TAG, "Starting data collection");
-  this->set_next_state_(State::OPEN_SESSION);
+  this->set_next_state_(State::TRY_LOCK_BUS);
 }
 
 void EnergomeraIecComponent::queue_single_read(const std::string &request) {
@@ -505,7 +515,10 @@ bool EnergomeraIecComponent::set_sensor_value_(EnergomeraIecSensorBase *sensor, 
              idx + 1, sub_idx, str);
     str = this->get_nth_value_from_csv_(str, sub_idx);
     if (str == nullptr) {
-      ESP_LOGE(TAG, "Cannot extract sensor value by sub-index %d. Is data comma-separated? Also note that sub-index starts from 1", sub_idx);
+      ESP_LOGE(TAG,
+               "Cannot extract sensor value by sub-index %d. Is data comma-separated? Also note that sub-index starts "
+               "from 1",
+               sub_idx);
       str_buffer[0] = '\0';
       str = str_buffer;
     }
@@ -788,6 +801,8 @@ const char *EnergomeraIecComponent::state_to_string(State state) {
       return "NOT_INITIALIZED";
     case State::IDLE:
       return "IDLE";
+    case State::TRY_LOCK_BUS:
+      return "TRY_LOCK_BUS";
     case State::WAIT:
       return "WAIT";
     case State::WAITING_FOR_RESPONSE:
@@ -818,29 +833,45 @@ const char *EnergomeraIecComponent::state_to_string(State state) {
 }
 
 void EnergomeraIecComponent::log_state_(State *next_state) {
-  static State last_reported_state{State::NOT_INITIALIZED};
-  State current_state = this->state_;
-  if (current_state != last_reported_state) {
+  if (this->state_ != this->last_reported_state_) {
     if (next_state == nullptr) {
-      ESP_LOGV(TAG, "State::%s", state_to_string(current_state));
+      ESP_LOGV(TAG, "State::%s", this->state_to_string(this->state_));
     } else {
-      ESP_LOGV(TAG, "State::%s -> %s", state_to_string(current_state), state_to_string(*next_state));
+      ESP_LOGV(TAG, "State::%s -> %s", this->state_to_string(this->state_), this->state_to_string(*next_state));
     }
-    last_reported_state = current_state;
+    this->last_reported_state_ = this->state_;
   }
 }
 
-void EnergomeraIecComponent::Stats::dump() {
-  ESP_LOGD(TAG, "============================================");
-  ESP_LOGD(TAG, "Data collection and publishing finished.");
-  ESP_LOGD(TAG, "Total number of sessions ............. %u", this->connections_tried_);
-  ESP_LOGD(TAG, "Total number of invalid frames ....... %u", this->invalid_frames_);
-  ESP_LOGD(TAG, "Total number of CRC errors ........... %u", this->crc_errors_);
-  ESP_LOGD(TAG, "Total number of CRC errors recovered . %u", this->crc_errors_recovered_);
-  ESP_LOGD(TAG, "CRC errors per session ............... %f", this->crc_errors_per_session());
-  ESP_LOGD(TAG, "Number of failures ................... %u", this->failures_);
-  ESP_LOGD(TAG, "============================================");
+void EnergomeraIecComponent::stats_dump_() {
+  ESP_LOGV(TAG, "============================================");
+  ESP_LOGV(TAG, "Data collection and publishing finished.");
+  ESP_LOGV(TAG, "Total number of sessions ............. %u", this->stats_.connections_tried_);
+  ESP_LOGV(TAG, "Total number of invalid frames ....... %u", this->stats_.invalid_frames_);
+  ESP_LOGV(TAG, "Total number of CRC errors ........... %u", this->stats_.crc_errors_);
+  ESP_LOGV(TAG, "Total number of CRC errors recovered . %u", this->stats_.crc_errors_recovered_);
+  ESP_LOGV(TAG, "CRC errors per session ............... %f", this->stats_.crc_errors_per_session());
+  ESP_LOGV(TAG, "Number of failures ................... %u", this->stats_.failures_);
+  ESP_LOGV(TAG, "============================================");
 }
+
+bool EnergomeraIecComponent::try_lock_uart_session_() {
+  if (AnyObjectLocker::try_lock(this->parent_)) {
+    ESP_LOGVV(TAG, "UART bus %p locked by %s", this->parent_, this->tag_.c_str());
+    return true;
+  }
+  ESP_LOGVV(TAG, "UART bus %p busy", this->parent_);
+  return false;
+}
+
+void EnergomeraIecComponent::unlock_uart_session_() {
+  AnyObjectLocker::unlock(this->parent_);
+  ESP_LOGVV(TAG, "UART bus %p released by %s", this->parent_, this->tag_.c_str());
+}
+
+uint8_t EnergomeraIecComponent::next_obj_id_ = 0;
+
+std::string EnergomeraIecComponent::generateTag() { return str_sprintf("%s%03d", TAG0, ++next_obj_id_); }
 
 }  // namespace energomera_iec
 }  // namespace esphome
