@@ -32,7 +32,7 @@ using ReadFunction = std::function<size_t()>;
 
 class EnergomeraIecComponent : public PollingComponent, public uart::UARTDevice {
  public:
-  EnergomeraIecComponent() = default;
+  EnergomeraIecComponent() : tag_(generateTag()){};
 
   void setup() override;
   void dump_config() override;
@@ -85,6 +85,7 @@ class EnergomeraIecComponent : public PollingComponent, public uart::UARTDevice 
     SINGLE_READ,
     SINGLE_READ_ACK,
   } state_{State::NOT_INITIALIZED};
+  State last_reported_state_{State::NOT_INITIALIZED};
 
   struct {
     uint32_t start_time{0};
@@ -165,8 +166,8 @@ class EnergomeraIecComponent : public PollingComponent, public uart::UARTDevice 
     uint8_t failures_{0};
 
     float crc_errors_per_session() const { return (float) crc_errors_ / connections_tried_; }
-    void dump();
   } stats_;
+  void stats_dump_();
 
   uint8_t failures_before_reboot_{0};
 
@@ -178,6 +179,12 @@ class EnergomeraIecComponent : public PollingComponent, public uart::UARTDevice 
 
   bool try_lock_uart_session_();
   void unlock_uart_session_();
+
+ private:
+  static uint8_t next_obj_id_;
+  std::string tag_;
+
+  static std::string generateTag();
 };
 
 }  // namespace energomera_iec
