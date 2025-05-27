@@ -54,6 +54,8 @@ class EnergomeraIecComponent : public PollingComponent, public uart::UARTDevice 
 
   void queue_single_read(const std::string &req);
 
+  void set_device_time(uint32_t timestamp);
+
  protected:
   std::string meter_address_{""};
   uint32_t receive_timeout_ms_{500};
@@ -64,8 +66,11 @@ class EnergomeraIecComponent : public PollingComponent, public uart::UARTDevice 
 
   SensorMap sensors_;
   SingleRequests single_requests_;
-
+  
   sensor::Sensor *crc_errors_per_session_sensor_{};
+  
+  uint32_t time_to_set_{0};
+  uint32_t time_to_set_requested_at_ms_{0};
 
   enum class State : uint8_t {
     NOT_INITIALIZED,
@@ -73,6 +78,7 @@ class EnergomeraIecComponent : public PollingComponent, public uart::UARTDevice 
     TRY_LOCK_BUS,
     WAIT,
     WAITING_FOR_RESPONSE,
+    SET_DATE_TIME,
     OPEN_SESSION,
     OPEN_SESSION_GET_ID,
     SET_BAUD,
@@ -135,12 +141,14 @@ class EnergomeraIecComponent : public PollingComponent, public uart::UARTDevice 
   void prepare_frame_(const uint8_t *data, size_t length);
   void prepare_prog_frame_(const char *request);
   void prepare_non_session_prog_frame_(const char *request);
+  void prepare_ctime_frame_(uint8_t hh, uint8_t mm, uint8_t ss);
 
   void send_frame_(const uint8_t *data, size_t length);
   void send_frame_prepared_();
 
   size_t receive_frame_(FrameStopFunction stop_fn);
   size_t receive_frame_ascii_();
+  size_t receive_frame_ack_nack_();
   size_t receive_prog_frame_(uint8_t start_byte, bool accept_ack_and_nack = false);
 
   inline void update_last_rx_time_() { this->last_rx_time_ = millis(); }

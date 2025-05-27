@@ -1,6 +1,7 @@
 #include "esphome/core/log.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/application.h"
+#include "esphome/core/time.h"
 #include "energomera_iec.h"
 #include <sstream>
 
@@ -355,8 +356,31 @@ void EnergomeraIecComponent::loop() {
       }
 
       ESP_LOGD(TAG, "Meter address: %s", vals[0]);
-      this->set_next_state_(State::DATA_ENQ);
+
+      if (this->time_to_set_ != 0) {
+        this->set_next_state_(State::SET_DATE_TIME);
+      } else {
+        this->set_next_state_(State::DATA_ENQ);
+      }
       break;
+
+    case State::SET_DATE_TIME: {
+      this->log_state_();
+      this->update_last_rx_time_();
+
+      uint32_t ms_since_asked = millis() - this->time_to_set_requested_at_ms_;
+      ESPTime time = ESPTime::from_epoch_local(this->time_to_set_ + ms_since_asked / 1000);
+
+      this->time_to_set_ = 0;
+      this->time_to_set_requested_at_ms_ = 0;
+
+      this->prepare_ctime_frame_(time.hour, time.minute, time.second);
+      this->send_frame_prepared_();
+      this->set_next_state_(State::DATA_ENQ);
+      auto read_fn = [this]() { return this->receive_frame_ack_nack_(); };
+      // non mission crit, no crc
+      this->read_reply_and_go_next_state_(read_fn, State::DATA_ENQ, 0, false, false);
+    } break;
 
     case State::DATA_ENQ:
       this->log_state_();
@@ -494,6 +518,24 @@ bool char2float(const char *str, float &value) {
   return *end == '\0';
 }
 
+void EnergomeraIecComponent::set_device_time(uint32_t timestamp) {
+  ESP_LOGD(TAG, "set_device_time: %u", timestamp);
+  this->time_to_set_ = timestamp;
+  this->time_to_set_requested_at_ms_ = millis();
+
+  auto time = ESPTime::from_epoch_local(timestamp);  // Convert to local time
+
+  int year = time.year;
+  int month = time.month;
+  int day = time.day_of_month;
+  int hour = time.hour;
+  int minute = time.minute;
+  int second = time.second;
+
+  ESP_LOGD(TAG, "Time set queued: %04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second);
+  // this->update();
+}
+
 bool EnergomeraIecComponent::set_sensor_value_(EnergomeraIecSensorBase *sensor, ValueRefsArray &vals) {
   auto type = sensor->get_type();
   bool ret = true;
@@ -609,6 +651,14 @@ void EnergomeraIecComponent::prepare_non_session_prog_frame_(const char *request
   calculate_crc_prog_frame_(r1_ptr, this->buffers_.amount_out - r1_size, true);
 }
 
+void EnergomeraIecComponent::prepare_ctime_frame_(uint8_t hh, uint8_t mm, uint8_t ss) {
+  // "/?CTIME(HH:MM:SS)!\r\n"
+  // no crc
+
+  this->buffers_.amount_out =
+      snprintf((char *) this->buffers_.out, MAX_OUT_BUF_SIZE, "/?CTIME(%02d:%02d:%02d)!\r\n", hh, mm, ss);
+}
+
 void EnergomeraIecComponent::send_frame_prepared_() {
   if (this->flow_control_pin_ != nullptr)
     this->flow_control_pin_->digital_write(true);
@@ -679,7 +729,7 @@ size_t EnergomeraIecComponent::receive_frame_(FrameStopFunction stop_fn) {
 size_t EnergomeraIecComponent::receive_frame_ascii_() {
   // "data<CR><LF>"
   ESP_LOGVV(TAG, "Waiting for ASCII frame");
-  auto frame_end_check_crlf = [](uint8_t *b, size_t s) {
+  auto frame_end_check_crlf = [this](uint8_t *b, size_t s) {
     auto ret = s >= 2 && b[s - 1] == '\n' && b[s - 2] == '\r';
     if (ret) {
       ESP_LOGVV(TAG, "Frame CRLF Stop");
@@ -687,6 +737,23 @@ size_t EnergomeraIecComponent::receive_frame_ascii_() {
     return ret;
   };
   return receive_frame_(frame_end_check_crlf);
+}
+
+size_t EnergomeraIecComponent::receive_frame_ack_nack_() {
+  // "<ACK/NAK>"
+  //  ESP_LOGVV(TAG, "Waiting for ACK/NAK frame");
+  auto frame_end_check_ack_nack = [this](uint8_t *b, size_t s) {
+    auto ret = s == 1 && (b[0] == ACK || b[0] == NAK);
+    if (ret) {
+      if (b[0] == ACK) {
+        ESP_LOGVV(TAG, "Frame ACK Stop");
+      } else {
+        ESP_LOGVV(TAG, "Frame NAK Stop");
+      }
+    }
+    return ret;
+  };
+  return receive_frame_(frame_end_check_ack_nack);
 }
 
 size_t EnergomeraIecComponent::receive_prog_frame_(uint8_t start_byte, bool accept_ack_and_nack) {
@@ -807,6 +874,8 @@ const char *EnergomeraIecComponent::state_to_string(State state) {
       return "WAIT";
     case State::WAITING_FOR_RESPONSE:
       return "WAITING_FOR_RESPONSE";
+    case State::SET_DATE_TIME:
+      return "SET_DATE_TIME";
     case State::OPEN_SESSION:
       return "OPEN_SESSION";
     case State::OPEN_SESSION_GET_ID:
