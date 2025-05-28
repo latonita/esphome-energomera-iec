@@ -367,6 +367,7 @@ void EnergomeraIecComponent::loop() {
     case State::SET_DATE_TIME: {
       this->log_state_();
       this->update_last_rx_time_();
+      this->set_next_state_(State::DATA_ENQ);
 
       uint32_t ms_since_asked = millis() - this->time_to_set_requested_at_ms_;
       ESPTime time = ESPTime::from_epoch_local(this->time_to_set_ + ms_since_asked / 1000);
@@ -374,12 +375,17 @@ void EnergomeraIecComponent::loop() {
       this->time_to_set_ = 0;
       this->time_to_set_requested_at_ms_ = 0;
 
-      this->prepare_ctime_frame_(time.hour, time.minute, time.second);
+      // this->prepare_ctime_frame_(time.hour, time.minute, time.second);
+      // auto read_fn = [this]() { return this->receive_frame_ack_nack_(); };
+
+      // prepare time command: CTIME(HH.MM.SS)
+      char set_time_cmd[32]{0};
+      size_t len =
+          snprintf(set_time_cmd, sizeof(set_time_cmd), "CTIME(%02d.%02d.%02d)", time.hour, time.minute, time.second);
+      this->prepare_prog_frame_(set_time_cmd);
       this->send_frame_prepared_();
-      this->set_next_state_(State::DATA_ENQ);
-      auto read_fn = [this]() { return this->receive_frame_ack_nack_(); };
-      // non mission crit, no crc
-      this->read_reply_and_go_next_state_(read_fn, State::DATA_ENQ, 0, false, false);
+      auto read_fn = [this]() { return this->receive_prog_frame_(STX); };
+      this->read_reply_and_go_next_state_(read_fn, State::DATA_ENQ, 0, false, true);
     } break;
 
     case State::DATA_ENQ:
