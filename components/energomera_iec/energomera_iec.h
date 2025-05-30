@@ -152,7 +152,7 @@ class EnergomeraIecComponent : public PollingComponent, public uart::UARTDevice 
   bool check_crc_prog_frame_(uint8_t *data, size_t length);
 
   void prepare_frame_(const uint8_t *data, size_t length);
-  void prepare_prog_frame_(const char *request);
+  void prepare_prog_frame_(const char *request, bool write = false);
   void prepare_non_session_prog_frame_(const char *request);
   void prepare_ctime_frame_(uint8_t hh, uint8_t mm, uint8_t ss);
 

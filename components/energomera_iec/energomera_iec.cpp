@@ -468,7 +468,7 @@ void EnergomeraIecComponent::loop() {
 
       char set_time_cmd[16]{0};
       size_t len = snprintf(set_time_cmd, sizeof(set_time_cmd), "CTIME(%d)", correction_seconds);
-      this->prepare_prog_frame_(set_time_cmd);
+      this->prepare_prog_frame_(set_time_cmd, true);
       this->send_frame_prepared_();
       auto read_fn = [this]() { return this->receive_prog_frame_(STX); };
       this->read_reply_and_go_next_state_(read_fn, State::DATA_ENQ, 0, false, true);
@@ -725,11 +725,11 @@ void EnergomeraIecComponent::read_reply_and_go_next_state_(ReadFunction read_fn,
   set_next_state_(State::WAITING_FOR_RESPONSE);
 }
 
-void EnergomeraIecComponent::prepare_prog_frame_(const char *request) {
+void EnergomeraIecComponent::prepare_prog_frame_(const char *request, bool write) {
   // we assume request has format "XXXX(params)"
   // we assume it always has brackets
-  this->buffers_.amount_out =
-      snprintf((char *) this->buffers_.out, MAX_OUT_BUF_SIZE, "%cR1%c%s%c\xFF", SOH, STX, request, ETX);
+  this->buffers_.amount_out = snprintf((char *) this->buffers_.out, MAX_OUT_BUF_SIZE, "%c%c1%c%s%c\xFF", SOH,
+                                       (write ? 'W' : 'R'), STX, request, ETX);
   this->calculate_crc_prog_frame_(this->buffers_.out, this->buffers_.amount_out, true);
 }
 
