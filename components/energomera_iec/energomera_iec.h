@@ -5,6 +5,10 @@
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
 
+#ifdef USE_TIME
+#include "esphome/components/time/real_time_clock.h"
+#endif
+
 #include <cstdint>
 #include <string>
 #include <memory>
@@ -54,7 +58,11 @@ class EnergomeraIecComponent : public PollingComponent, public uart::UARTDevice 
 
   void queue_single_read(const std::string &req);
 
-  void set_device_time(uint32_t timestamp);
+#ifdef USE_TIME
+  void set_time_source(time::RealTimeClock *rtc) { this->time_source_ = rtc; };
+  void sync_device_time();  // set current time from RTC
+#endif
+  void set_device_time(uint32_t timestamp);  // set time from given timestamp
 
  protected:
   std::string meter_address_{""};
@@ -64,11 +72,15 @@ class EnergomeraIecComponent : public PollingComponent, public uart::UARTDevice 
   GPIOPin *flow_control_pin_{nullptr};
   std::unique_ptr<EnergomeraIecUart> iuart_;
 
+#ifdef USE_TIME
+  time::RealTimeClock *time_source_{nullptr};
+#endif
+
   SensorMap sensors_;
   SingleRequests single_requests_;
-  
+
   sensor::Sensor *crc_errors_per_session_sensor_{};
-  
+
   uint32_t time_to_set_{0};
   uint32_t time_to_set_requested_at_ms_{0};
 
@@ -78,6 +90,7 @@ class EnergomeraIecComponent : public PollingComponent, public uart::UARTDevice 
     TRY_LOCK_BUS,
     WAIT,
     WAITING_FOR_RESPONSE,
+    GET_DATE_TIME,
     SET_DATE_TIME,
     OPEN_SESSION,
     OPEN_SESSION_GET_ID,

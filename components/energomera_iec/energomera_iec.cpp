@@ -358,30 +358,116 @@ void EnergomeraIecComponent::loop() {
       ESP_LOGD(TAG, "Meter address: %s", vals[0]);
 
       if (this->time_to_set_ != 0) {
-        this->set_next_state_(State::SET_DATE_TIME);
+        this->set_next_state_(State::GET_DATE_TIME);
       } else {
         this->set_next_state_(State::DATA_ENQ);
       }
       break;
 
+    case State::GET_DATE_TIME: {
+      this->log_state_();
+      this->update_last_rx_time_();
+      this->set_next_state_(State::SET_DATE_TIME);
+      this->prepare_prog_frame_("TIME_()");
+      this->send_frame_prepared_();
+      auto read_fn = [this]() { return this->receive_prog_frame_(STX); };
+      this->read_reply_and_go_next_state_(read_fn, State::SET_DATE_TIME, 3, false, true);
+
+    } break;
+
     case State::SET_DATE_TIME: {
       this->log_state_();
+      uint32_t time_data_received_ms = this->last_rx_time_;
+
       this->update_last_rx_time_();
       this->set_next_state_(State::DATA_ENQ);
 
+      if (received_frame_size_ == 0) {
+        ESP_LOGE(TAG, "Time response not received or corrupted. We will try during next update cycle.");
+        this->update_last_rx_time_();
+        this->clear_rx_buffers_();
+        return;
+      }
+      uint8_t brackets_found = get_values_from_brackets_(in_param_ptr, vals);
+      if (!brackets_found) {
+        ESP_LOGE(TAG, "Invalid frame format: '%s'", in_param_ptr);
+        this->stats_.invalid_frames_++;
+        return;
+      }
+
+      if (in_param_ptr[0] == '\0') {
+        if (vals[0][0] == 'E' && vals[0][1] == 'R' && vals[0][2] == 'R') {
+          ESP_LOGE(TAG, "Response '%s' either not supported or malformed. Error code %s", in_param_ptr, vals[0]);
+        } else {
+          ESP_LOGE(TAG, "Response '%s' either not supported or malformed.", in_param_ptr);
+        }
+        return;
+      }
+
+      // now vals[0] contains time in format HH:MM:SS
+      ESP_LOGD(TAG, "Received time: %s", vals[0]);
+
+      int32_t correction_seconds = 0;
+
+      // now we need to calculate the difference between time we received from the meter
+      // and the time we want to set
+      // taking into account:
+      // - time in ms when we received the time from the meter
+      // - time in ms when we requested to set the time
+      // - we dont want to take into account DATE, so we will use only time part
+      //
+      // we correct time to closer time in 24hr circle,
+      // it means if meter time is 23:59:59 and rtc time is 00:00:01,
+      // then we shall correct CTIME(2) to set time to 00:00:01, not trying to round back by 24 hrs.
+
+      uint8_t hr, min, sec;
+      // parse received_time from vals[0]
+      sscanf(vals[0], "%d:%d:%d", &hr, &min, &sec);
+      // what sscanf returns?
+      if (hr > 23 || min > 59 || sec > 59) {
+        ESP_LOGE(TAG, "Invalid time received from meter: %s", vals[0]);
+        this->stats_.invalid_frames_++;
+        return;
+      }
+
+      constexpr int32_t SECONDS_IN_24H = 24 * 3600;
+      constexpr int32_t SECONDS_IN_12H = 12 * 3600;
+
+      uint32_t time_data_received_s = (millis() - time_data_received_ms) / 1000;
+      int32_t received_time_seconds = ((hr * 3600) + (min * 60) + sec + time_data_received_s) % SECONDS_IN_24H;
+
       uint32_t ms_since_asked = millis() - this->time_to_set_requested_at_ms_;
       ESPTime time = ESPTime::from_epoch_local(this->time_to_set_ + ms_since_asked / 1000);
+      int32_t requested_time_seconds = (time.hour * 3600) + (time.minute * 60) + time.second;
+
+      // find the difference and proper direction of change. it shall be within 12 hrs
+      correction_seconds = requested_time_seconds - received_time_seconds;
+      if (correction_seconds > SECONDS_IN_12H) {
+        correction_seconds -= SECONDS_IN_24H;  // round back to 12 hrs
+      } else if (correction_seconds < -SECONDS_IN_12H) {
+        correction_seconds += SECONDS_IN_24H;  // round forward to 12 hrs
+      }
 
       this->time_to_set_ = 0;
       this->time_to_set_requested_at_ms_ = 0;
 
-      // this->prepare_ctime_frame_(time.hour, time.minute, time.second);
-      // auto read_fn = [this]() { return this->receive_frame_ack_nack_(); };
+      if (correction_seconds == 0) {
+        ESP_LOGD(TAG, "No time correction needed");
+        this->set_next_state_(State::DATA_ENQ);
+        return;
+      }
 
-      // prepare time command: CTIME(HH.MM.SS)
-      char set_time_cmd[32]{0};
-      size_t len =
-          snprintf(set_time_cmd, sizeof(set_time_cmd), "CTIME(%02d.%02d.%02d)", time.hour, time.minute, time.second);
+      ESP_LOGD(TAG, "Time correction needed: %d seconds", correction_seconds);
+
+      if (correction_seconds > 29) {
+        correction_seconds = 29;
+      } else if (correction_seconds < -29) {
+        correction_seconds = -29;
+      }
+      ESP_LOGD(TAG, "Setting time correction within +/- 29 seconds: %d", correction_seconds);
+
+      char set_time_cmd[16]{0};
+      size_t len = snprintf(set_time_cmd, sizeof(set_time_cmd), "CTIME(%d)", correction_seconds);
       this->prepare_prog_frame_(set_time_cmd);
       this->send_frame_prepared_();
       auto read_fn = [this]() { return this->receive_prog_frame_(STX); };
@@ -524,22 +610,27 @@ bool char2float(const char *str, float &value) {
   return *end == '\0';
 }
 
+#ifdef USE_TIME
+void EnergomeraIecComponent::sync_device_time() {
+  if (this->time_source_ == nullptr) {
+    ESP_LOGE(TAG, "Time source not set. Time can not be synced.");
+    return;
+  }
+  auto time = this->time_source_->now();
+  if (!time.is_valid()) {
+    ESP_LOGW(TAG, "Time is not yet valid.  Time can not be synced.");
+    return;
+  }
+  this->set_device_time(time.timestamp);
+}
+#endif
+
 void EnergomeraIecComponent::set_device_time(uint32_t timestamp) {
   ESP_LOGD(TAG, "set_device_time: %u", timestamp);
+  if (!timestamp)
+    return;
   this->time_to_set_ = timestamp;
   this->time_to_set_requested_at_ms_ = millis();
-
-  auto time = ESPTime::from_epoch_local(timestamp);  // Convert to local time
-
-  int year = time.year;
-  int month = time.month;
-  int day = time.day_of_month;
-  int hour = time.hour;
-  int minute = time.minute;
-  int second = time.second;
-
-  ESP_LOGD(TAG, "Time set queued: %04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second);
-  // this->update();
 }
 
 bool EnergomeraIecComponent::set_sensor_value_(EnergomeraIecSensorBase *sensor, ValueRefsArray &vals) {
@@ -880,6 +971,8 @@ const char *EnergomeraIecComponent::state_to_string(State state) {
       return "WAIT";
     case State::WAITING_FOR_RESPONSE:
       return "WAITING_FOR_RESPONSE";
+    case State::GET_DATE_TIME:
+      return "GET_DATE_TIME";
     case State::SET_DATE_TIME:
       return "SET_DATE_TIME";
     case State::OPEN_SESSION:

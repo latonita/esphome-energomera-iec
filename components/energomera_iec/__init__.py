@@ -2,7 +2,7 @@ import re
 from esphome import pins
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import uart, binary_sensor
+from esphome.components import uart, binary_sensor, time
 from esphome.const import (
     CONF_ID,
     CONF_ADDRESS,
@@ -10,6 +10,7 @@ from esphome.const import (
     CONF_RECEIVE_TIMEOUT,
     CONF_UPDATE_INTERVAL,
     CONF_FLOW_CONTROL_PIN,
+    CONF_TIME_ID,
 )
 
 CODEOWNERS = ["@latonita"]
@@ -94,6 +95,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_REBOOT_AFTER_FAILURE, default=0): cv.int_range(
                 min=0, max=100
             ),
+            cv.Optional(CONF_TIME_ID): cv.use_id(time.RealTimeClock),
         }
     )
     .extend(cv.COMPONENT_SCHEMA)
@@ -115,6 +117,10 @@ async def to_code(config):
         await binary_sensor.register_binary_sensor(sens, indicator_config)
         cg.add(var.set_indicator(sens))
 
+    if CONF_TIME_ID in config:
+        time_ = await cg.get_variable(config[CONF_TIME_ID])
+        cg.add(var.set_time_source(time_))
+        
     cg.add(var.set_meter_address(config[CONF_ADDRESS]))
     cg.add(var.set_baud_rates(config[CONF_BAUD_RATE_HANDSHAKE], config[CONF_BAUD_RATE]))
     cg.add(var.set_receive_timeout_ms(config[CONF_RECEIVE_TIMEOUT]))
