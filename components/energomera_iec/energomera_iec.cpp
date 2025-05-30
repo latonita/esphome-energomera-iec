@@ -470,7 +470,8 @@ void EnergomeraIecComponent::loop() {
       size_t len = snprintf(set_time_cmd, sizeof(set_time_cmd), "CTIME(%d)", correction_seconds);
       this->prepare_prog_frame_(set_time_cmd, true);
       this->send_frame_prepared_();
-      auto read_fn = [this]() { return this->receive_prog_frame_(STX); };
+      // auto read_fn = [this]() { return this->receive_prog_frame_(STX); };
+      auto read_fn = [this]() { return this->receive_frame_ack_nack_(); };
       this->read_reply_and_go_next_state_(read_fn, State::DATA_ENQ, 0, false, true);
     } break;
 
