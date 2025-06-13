@@ -206,6 +206,12 @@ class EnergomeraIecComponent : public PollingComponent, public uart::UARTDevice 
   std::string tag_;
 
   static std::string generateTag();
+
+  // Data structures for time synchronization
+  ESPTime meter_datetime_{};
+
+  // Helper method to get complete timestamp from parsed meter datetime components
+  ESPTime get_meter_datetime();
 };
 
 }  // namespace energomera_iec
