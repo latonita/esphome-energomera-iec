@@ -851,6 +851,7 @@ void EnergomeraIecComponent::send_frame_prepared_() {
     this->flow_control_pin_->digital_write(true);
 
   this->write_array(this->buffers_.out, this->buffers_.amount_out);
+  this->flush();
 
   if (this->flow_control_pin_ != nullptr)
     this->flow_control_pin_->digital_write(false);
