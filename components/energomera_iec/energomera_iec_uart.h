@@ -15,6 +15,13 @@
 #include "esphome/components/uart/uart_component_esp8266.h"
 #endif
 
+#ifdef USE_ESP_IDF
+// backward compatibility with old IDF versions
+#ifndef portTICK_PERIOD_MS
+#define portTICK_PERIOD_MS portTICK_RATE_MS
+#endif
+#endif
+
 namespace esphome {
 namespace energomera_iec {
 
@@ -24,7 +31,8 @@ static const uint32_t TIMEOUT = 20;  // default value in uart implementation is 
 
 class EnergomeraIecUart final : public uart::ESP32ArduinoUARTComponent {
  public:
-  EnergomeraIecUart(uart::ESP32ArduinoUARTComponent const &uart) : uart_(uart), hw_(uart.*(&EnergomeraIecUart::hw_serial_)) {}
+  EnergomeraIecUart(uart::ESP32ArduinoUARTComponent const &uart)
+      : uart_(uart), hw_(uart.*(&EnergomeraIecUart::hw_serial_)) {}
 
   // Reconfigure baudrate
   void update_baudrate(uint32_t baudrate) { this->hw_->updateBaudRate(baudrate); }
@@ -168,7 +176,7 @@ class EnergomeraIecUart final : public uart::IDFUARTComponent {
       this->has_peek_ = false;
     }
     if (length_to_read > 0)
-      uart_read_bytes(this->iuart_num_, data, length_to_read, 20 / portTICK_RATE_MS);
+      uart_read_bytes(this->iuart_num_, data, length_to_read, 20 / portTICK_PERIOD_MS);
     xSemaphoreGive(this->ilock_);
 
     return true;
