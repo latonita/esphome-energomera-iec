@@ -357,7 +357,7 @@ void EnergomeraIecComponent::loop() {
 
       ESP_LOGD(TAG, "Meter address: %s", vals[0]);
 
-      // this->set_next_state_(State::GET_DATE);
+      // did we have a time correction request?
       if (this->time_to_set_ != 0) {
         this->set_next_state_(State::GET_DATE);
       } else {
@@ -372,7 +372,8 @@ void EnergomeraIecComponent::loop() {
       this->meter_datetime_str_[0] = '\0';  // reset string
 
       this->set_next_state_(State::GET_TIME);
-      // happy to use group reads, but
+      // happy to use group reads, but GROUP readings work differently on different meters and not part of the standard
+      // protocol
       //      this->prepare_prog_frame_("GROUP(DATE_()TIME_())");
       this->prepare_prog_frame_("DATE_()");
       this->send_frame_prepared_();
@@ -386,8 +387,8 @@ void EnergomeraIecComponent::loop() {
       // We receive either of the following:
       //       0         1         2         3
       //       01234567890123456789012345678901234567890
-      //  <STX>DATE_(5.30.05.25)<CR><LF><ETX><ACK> (22)
-      //  <STX>DATE_(05.30.05.25)<CR><LF><ETX><ACK> (23)
+      //  <STX>DATE_(5.30.05.25)<CR><LF><ETX><ACK> (22)     // ce207
+      //  <STX>DATE_(05.30.05.25)<CR><LF><ETX><ACK> (23)    // ce301, etc.
       if (received_frame_size_ != 22 && received_frame_size_ != 23) {
         // no data or something wrong. error or malformed response
         ESP_LOGE(TAG, "No response or wrong response from meter. Can't get date, skipping sync.");
@@ -540,7 +541,27 @@ void EnergomeraIecComponent::loop() {
       this->prepare_prog_frame_(set_time_cmd, true);
       this->send_frame_prepared_();
       auto read_fn = [this]() { return this->receive_frame_ack_nack_(); };
-      this->read_reply_and_go_next_state_(read_fn, State::DATA_ENQ, 0, false, false);
+      this->read_reply_and_go_next_state_(read_fn, State::RECV_CORRECTION_RESULT, 0, false, false);
+    } break;
+
+    case State::RECV_CORRECTION_RESULT: {
+      this->log_state_();
+      this->set_next_state_(State::DATA_ENQ);
+
+      if (received_frame_size_ == 0) {
+        ESP_LOGW(TAG, "No response from meter after time correction request. Not supported?");
+        this->stats_.invalid_frames_++;
+        return;
+      }
+      char reply = this->buffers_.in[0];
+      if (reply == ACK) {
+        ESP_LOGD(TAG, "Time correction acknowledged");
+      } else if (reply == NAK) {
+        ESP_LOGD(TAG, "Time correction declined");
+      } else {
+        ESP_LOGD(TAG, "Time correction failed");
+      }
+
     } break;
 
     case State::DATA_ENQ:
@@ -1040,12 +1061,6 @@ const char *EnergomeraIecComponent::state_to_string(State state) {
       return "WAIT";
     case State::WAITING_FOR_RESPONSE:
       return "WAITING_FOR_RESPONSE";
-    case State::GET_DATE:
-      return "GET_DATE";
-    case State::GET_TIME:
-      return "GET_TIME";
-    case State::CORRECT_TIME:
-      return "CORRECT_TIME";
     case State::OPEN_SESSION:
       return "OPEN_SESSION";
     case State::OPEN_SESSION_GET_ID:
@@ -1054,6 +1069,14 @@ const char *EnergomeraIecComponent::state_to_string(State state) {
       return "SET_BAUD";
     case State::ACK_START_GET_INFO:
       return "ACK_START_GET_INFO";
+    case State::GET_DATE:
+      return "GET_DATE";
+    case State::GET_TIME:
+      return "GET_TIME";
+    case State::CORRECT_TIME:
+      return "CORRECT_TIME";
+    case State::RECV_CORRECTION_RESULT:
+      return "RECV_CORRECTION_RESULT";
     case State::DATA_ENQ:
       return "DATA_ENQ";
     case State::DATA_RECV:
