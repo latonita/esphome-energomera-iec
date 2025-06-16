@@ -493,6 +493,7 @@ void EnergomeraIecComponent::loop() {
       }
 
       auto now_ms = millis();
+#ifdef USE_TIME
       if (this->time_source_ != nullptr) {
         auto tm = this->time_source_->now();
         if (!tm.is_valid()) {
@@ -501,8 +502,8 @@ void EnergomeraIecComponent::loop() {
         }
         this->time_to_set_ = this->time_source_->now().timestamp;
         this->time_to_set_requested_at_ms_ = now_ms;
-      };
-
+      }
+#endif
       // if we are here, we have a valid time
       // find what is real time now
       uint32_t ms_since_asked = now_ms - this->time_to_set_requested_at_ms_;
