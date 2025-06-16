@@ -357,107 +357,177 @@ void EnergomeraIecComponent::loop() {
 
       ESP_LOGD(TAG, "Meter address: %s", vals[0]);
 
+      // did we have a time correction request?
       if (this->time_to_set_ != 0) {
-        this->set_next_state_(State::GET_DATE_TIME);
+        this->set_next_state_(State::GET_DATE);
       } else {
         this->set_next_state_(State::DATA_ENQ);
       }
       break;
 
-    case State::GET_DATE_TIME: {
+    case State::GET_DATE: {
       this->log_state_();
       this->update_last_rx_time_();
-      this->set_next_state_(State::SET_DATE_TIME);
+
+      this->meter_datetime_str_[0] = '\0';  // reset string
+
+      this->set_next_state_(State::GET_TIME);
+      // happy to use group reads, but GROUP readings work differently on different meters and not part of the standard
+      // protocol
+      //      this->prepare_prog_frame_("GROUP(DATE_()TIME_())");
+      this->prepare_prog_frame_("DATE_()");
+      this->send_frame_prepared_();
+      auto read_fn = [this]() { return this->receive_prog_frame_(STX); };
+      this->read_reply_and_go_next_state_(read_fn, State::GET_TIME, 3, false, true);
+    } break;
+
+    case State::GET_TIME: {
+      this->log_state_();
+      this->update_last_rx_time_();
+      // We receive either of the following:
+      //       0         1         2         3
+      //       01234567890123456789012345678901234567890
+      //  <STX>DATE_(5.30.05.25)<CR><LF><ETX><ACK> (22)     // ce207
+      //  <STX>DATE_(05.30.05.25)<CR><LF><ETX><ACK> (23)    // ce301, etc.
+      if (received_frame_size_ != 22 && received_frame_size_ != 23) {
+        // no data or something wrong. error or malformed response
+        ESP_LOGE(TAG, "No response or wrong response from meter. Can't get date, skipping sync.");
+        this->stats_.invalid_frames_++;
+        this->set_next_state_(State::DATA_ENQ);
+        return;
+      }
+      // 2020-08-25 05:30:00
+      // copy date parts
+      // assume it is year 20xx.
+      size_t d = 23 - received_frame_size_;  // 23 - 22 = 1, 23 - 23 = 0
+      this->meter_datetime_str_[0] = '2';
+      this->meter_datetime_str_[1] = '0';  // year 20xx
+      this->meter_datetime_str_[2] = in_param_ptr[d + 15];
+      this->meter_datetime_str_[3] = in_param_ptr[d + 16];  // year 20xx
+      this->meter_datetime_str_[4] = '-';                   // separator
+      this->meter_datetime_str_[5] = in_param_ptr[d + 12];  // month
+      this->meter_datetime_str_[6] = in_param_ptr[d + 13];  // month
+      this->meter_datetime_str_[7] = '-';                   // separator
+      this->meter_datetime_str_[8] = in_param_ptr[d + 9];   // day
+      this->meter_datetime_str_[9] = in_param_ptr[d + 10];  // day
+      this->meter_datetime_str_[10] = ' ';                  // separator
+      this->meter_datetime_str_[11] = '\0';
+
+      this->set_next_state_(State::CORRECT_TIME);
       this->prepare_prog_frame_("TIME_()");
       this->send_frame_prepared_();
       auto read_fn = [this]() { return this->receive_prog_frame_(STX); };
-      this->read_reply_and_go_next_state_(read_fn, State::SET_DATE_TIME, 3, false, true);
+      this->read_reply_and_go_next_state_(read_fn, State::CORRECT_TIME, 3, false, true);
 
     } break;
 
-    case State::SET_DATE_TIME: {
+    case State::CORRECT_TIME: {
       this->log_state_();
-      uint32_t time_data_received_ms = this->last_rx_time_;
+
+      // do not care, not real point in this
+      // auto time_received_delay_ms = millis() - this->last_rx_time_;
 
       this->update_last_rx_time_();
       this->set_next_state_(State::DATA_ENQ);
 
-      if (received_frame_size_ == 0) {
-        ESP_LOGE(TAG, "Time response not received or corrupted. We will try during next update cycle.");
-        this->update_last_rx_time_();
-        this->clear_rx_buffers_();
+      // here we expect to receive time in format HH:MM:SS
+      //      0         1         2         3
+      //      01234567890123456789012345678901234567890
+      // <STX>TIME_(23:40:10)<CR><LF><ETX><17> (20)
+
+      if (received_frame_size_ != 20) {
+        // no data or something wrong. error or malformed response
+        ESP_LOGE(TAG, "No response or wrong response from meter. Can't get time, skipping sync.");
+        this->stats_.invalid_frames_++;
         return;
       }
-      uint8_t brackets_found = get_values_from_brackets_(in_param_ptr, vals);
-      if (!brackets_found) {
-        ESP_LOGE(TAG, "Invalid frame format: '%s'", in_param_ptr);
+      memcpy(this->meter_datetime_str_ + 11, in_param_ptr + 6, 8);  // copy HH:MM:SS
+      this->meter_datetime_str_[19] = '\0';                         // null-terminate the string
+
+      ESPTime meter_datetime;
+      meter_datetime.day_of_week = 1;
+      meter_datetime.day_of_year = 1;
+      int num = 0;
+      {
+        uint16_t year;
+        uint8_t month;
+        uint8_t day;
+        uint8_t hour;
+        uint8_t minute;
+        uint8_t second;
+        num = sscanf(this->meter_datetime_str_, "%04hu-%02hhu-%02hhu %02hhu:%02hhu:%02hhu",
+                     &year,    // NOLINT
+                     &month,   // NOLINT
+                     &day,     // NOLINT
+                     &hour,    // NOLINT
+                     &minute,  // NOLINT
+                     &second);
+        meter_datetime.year = year;
+        meter_datetime.month = month;
+        meter_datetime.day_of_month = day;
+        meter_datetime.hour = hour;
+        meter_datetime.minute = minute;
+        meter_datetime.second = second;
+        meter_datetime.day_of_week = 1;
+        meter_datetime.day_of_year = 1;  // not used, but set to avoid uninitialized value
+      }
+      meter_datetime.recalc_timestamp_local();
+      if (num != 6) {
+        ESP_LOGE(TAG, "Invalid time received from meter: %s %d", this->meter_datetime_str_, num);
         this->stats_.invalid_frames_++;
         return;
       }
 
-      if (in_param_ptr[0] == '\0') {
-        if (vals[0][0] == 'E' && vals[0][1] == 'R' && vals[0][2] == 'R') {
-          ESP_LOGE(TAG, "Response '%s' either not supported or malformed. Error code %s", in_param_ptr, vals[0]);
-        } else {
-          ESP_LOGE(TAG, "Response '%s' either not supported or malformed.", in_param_ptr);
+      if (!meter_datetime.is_valid()) {
+        ESP_LOGE(TAG, "Invalid time received from meter: %s", this->meter_datetime_str_);
+        this->stats_.invalid_frames_++;
+        return;
+      }
+
+      // check if time is 2 mins before or after midnight, then skip correction, wait for next data request
+      // just to make sure we have proper date/time
+      if ((meter_datetime.hour == 0 && meter_datetime.minute < 2) ||
+          (meter_datetime.hour == 23 && meter_datetime.minute > 58)) {
+        ESP_LOGD(TAG, "Time is too close to midnight, skipping correction.");
+        return;
+      }
+
+      auto now_ms = millis();
+      if (this->time_source_ != nullptr) {
+        auto tm = this->time_source_->now();
+        if (!tm.is_valid()) {
+          ESP_LOGE(TAG, "Time sync requested, but time provider is not yet ready");
+          return;
         }
-        return;
-      }
+        this->time_to_set_ = this->time_source_->now().timestamp;
+        this->time_to_set_requested_at_ms_ = now_ms;
+      };
 
-      // now vals[0] contains time in format HH:MM:SS
-      ESP_LOGD(TAG, "Received time: %s", vals[0]);
+      // if we are here, we have a valid time
+      // find what is real time now
+      uint32_t ms_since_asked = now_ms - this->time_to_set_requested_at_ms_;
 
-      int32_t correction_seconds = 0;
-
-      // now we need to calculate the difference between time we received from the meter
-      // and the time we want to set
-      // taking into account:
-      // - time in ms when we received the time from the meter
-      // - time in ms when we requested to set the time
-      // - we dont want to take into account DATE, so we will use only time part
-      //
-      // we correct time to closer time in 24hr circle,
-      // it means if meter time is 23:59:59 and rtc time is 00:00:01,
-      // then we shall correct CTIME(2) to set time to 00:00:01, not trying to round back by 24 hrs.
-
-      uint8_t hr, min, sec;
-      // parse received_time from vals[0]
-      sscanf(vals[0], "%d:%d:%d", &hr, &min, &sec);
-      // what sscanf returns?
-      if (hr > 23 || min > 59 || sec > 59) {
-        ESP_LOGE(TAG, "Invalid time received from meter: %s", vals[0]);
-        this->stats_.invalid_frames_++;
-        return;
-      }
-
-      constexpr int32_t SECONDS_IN_24H = 24 * 3600;
-      constexpr int32_t SECONDS_IN_12H = 12 * 3600;
-
-      uint32_t time_data_received_s = (millis() - time_data_received_ms) / 1000;
-      int32_t received_time_seconds = ((hr * 3600) + (min * 60) + sec + time_data_received_s) % SECONDS_IN_24H;
-
-      uint32_t ms_since_asked = millis() - this->time_to_set_requested_at_ms_;
-      ESPTime time = ESPTime::from_epoch_local(this->time_to_set_ + ms_since_asked / 1000);
-      int32_t requested_time_seconds = (time.hour * 3600) + (time.minute * 60) + time.second;
-
-      // find the difference and proper direction of change. it shall be within 12 hrs
-      correction_seconds = requested_time_seconds - received_time_seconds;
-      if (correction_seconds > SECONDS_IN_12H) {
-        correction_seconds -= SECONDS_IN_24H;  // round back to 12 hrs
-      } else if (correction_seconds < -SECONDS_IN_12H) {
-        correction_seconds += SECONDS_IN_24H;  // round forward to 12 hrs
-      }
+      meter_datetime.recalc_timestamp_local();
+      int32_t correction_seconds = (this->time_to_set_ + ms_since_asked / 1000) - meter_datetime.timestamp;
 
       this->time_to_set_ = 0;
       this->time_to_set_requested_at_ms_ = 0;
 
-      if (correction_seconds == 0) {
-        ESP_LOGD(TAG, "No time correction needed");
-        this->set_next_state_(State::DATA_ENQ);
+      if (correction_seconds > -2 && correction_seconds < 2) {
+        ESP_LOGD(TAG, "No time correction needed (less than 2 seconds)");
         return;
       }
 
       ESP_LOGD(TAG, "Time correction needed: %d seconds", correction_seconds);
+
+      constexpr int32_t SECONDS_IN_24H = 24 * 3600;
+
+      // if correction is more than 24 hours,
+      // it is serious meter failure, meter shall be replaced or time is completely wrong
+      if (correction_seconds > SECONDS_IN_24H || correction_seconds < -SECONDS_IN_24H) {
+        ESP_LOGE(TAG, "Time correction is more than 24 hours, meter is broken or time is completely wrong.");
+        return;
+      }
 
       if (correction_seconds > 29) {
         correction_seconds = 29;
@@ -470,9 +540,28 @@ void EnergomeraIecComponent::loop() {
       size_t len = snprintf(set_time_cmd, sizeof(set_time_cmd), "CTIME(%d)", correction_seconds);
       this->prepare_prog_frame_(set_time_cmd, true);
       this->send_frame_prepared_();
-      // auto read_fn = [this]() { return this->receive_prog_frame_(STX); };
       auto read_fn = [this]() { return this->receive_frame_ack_nack_(); };
-      this->read_reply_and_go_next_state_(read_fn, State::DATA_ENQ, 0, false, true);
+      this->read_reply_and_go_next_state_(read_fn, State::RECV_CORRECTION_RESULT, 0, false, false);
+    } break;
+
+    case State::RECV_CORRECTION_RESULT: {
+      this->log_state_();
+      this->set_next_state_(State::DATA_ENQ);
+
+      if (received_frame_size_ == 0) {
+        ESP_LOGW(TAG, "No response from meter after time correction request. Not supported?");
+        this->stats_.invalid_frames_++;
+        return;
+      }
+      char reply = this->buffers_.in[0];
+      if (reply == ACK) {
+        ESP_LOGD(TAG, "Time correction acknowledged");
+      } else if (reply == NAK) {
+        ESP_LOGD(TAG, "Time correction declined");
+      } else {
+        ESP_LOGD(TAG, "Time correction failed");
+      }
+
     } break;
 
     case State::DATA_ENQ:
@@ -622,7 +711,7 @@ void EnergomeraIecComponent::sync_device_time() {
     ESP_LOGW(TAG, "Time is not yet valid.  Time can not be synced.");
     return;
   }
-  this->set_device_time(time.timestamp);
+  this->set_device_time(1);
 }
 #endif
 
@@ -972,10 +1061,6 @@ const char *EnergomeraIecComponent::state_to_string(State state) {
       return "WAIT";
     case State::WAITING_FOR_RESPONSE:
       return "WAITING_FOR_RESPONSE";
-    case State::GET_DATE_TIME:
-      return "GET_DATE_TIME";
-    case State::SET_DATE_TIME:
-      return "SET_DATE_TIME";
     case State::OPEN_SESSION:
       return "OPEN_SESSION";
     case State::OPEN_SESSION_GET_ID:
@@ -984,6 +1069,14 @@ const char *EnergomeraIecComponent::state_to_string(State state) {
       return "SET_BAUD";
     case State::ACK_START_GET_INFO:
       return "ACK_START_GET_INFO";
+    case State::GET_DATE:
+      return "GET_DATE";
+    case State::GET_TIME:
+      return "GET_TIME";
+    case State::CORRECT_TIME:
+      return "CORRECT_TIME";
+    case State::RECV_CORRECTION_RESULT:
+      return "RECV_CORRECTION_RESULT";
     case State::DATA_ENQ:
       return "DATA_ENQ";
     case State::DATA_RECV:

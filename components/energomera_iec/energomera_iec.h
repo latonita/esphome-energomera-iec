@@ -90,12 +90,14 @@ class EnergomeraIecComponent : public PollingComponent, public uart::UARTDevice 
     TRY_LOCK_BUS,
     WAIT,
     WAITING_FOR_RESPONSE,
-    GET_DATE_TIME,
-    SET_DATE_TIME,
     OPEN_SESSION,
     OPEN_SESSION_GET_ID,
     SET_BAUD,
     ACK_START_GET_INFO,
+    GET_DATE,
+    GET_TIME,
+    CORRECT_TIME,
+    RECV_CORRECTION_RESULT,
     DATA_ENQ,
     DATA_RECV,
     DATA_NEXT,
@@ -206,6 +208,9 @@ class EnergomeraIecComponent : public PollingComponent, public uart::UARTDevice 
   std::string tag_;
 
   static std::string generateTag();
+
+  // Data structures for time synchronization
+  char meter_datetime_str_[20]{};
 };
 
 }  // namespace energomera_iec
