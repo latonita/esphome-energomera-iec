@@ -1,3 +1,11 @@
+[СПОДЭС/DLMS/COSEM](https://github.com/latonita/esphome-dlms-cosem) •
+[МЭК-61107/IEC-61107](https://github.com/latonita/esphome-iec61107-meter) •
+[Энергомера МЭК/IEC](https://github.com/latonita/esphome-energomera-iec) •
+[Энергомера CE](https://github.com/latonita/esphome-energomera-ce) •
+[СПб ЗИП ЦЭ2727А](https://github.com/latonita/esphome-ce2727a-meter) •
+[Ленэлектро ЛЕ-2](https://github.com/latonita/esphome-le2-meter) •
+[Пульсар-М](https://github.com/latonita/esphome-pulsar-m)
+
 # ESPHome компонент для подключения счетчиков электроэнергии Энергомера CE102M CE207 CE208 CE301 CE303 CE307 CE308 по RS-485 (ГОСТ МЭК/IEC 61107-2011)
 
 * [1. Назначение](#1-назначение)
