@@ -107,11 +107,8 @@ void EnergomeraIecComponent::set_baud_rate_(uint32_t baud_rate) {
 
 void EnergomeraIecComponent::setup() {
   ESP_LOGD(TAG, "setup");
-#ifdef USE_ESP32_FRAMEWORK_ARDUINO
-  iuart_ = make_unique<EnergomeraIecUart>(*static_cast<uart::ESP32ArduinoUARTComponent *>(this->parent_));
-#endif
 
-#ifdef USE_ESP_IDF
+#ifdef USE_ESP32
   iuart_ = make_unique<EnergomeraIecUart>(*static_cast<uart::IDFUARTComponent *>(this->parent_));
 #endif
 
@@ -948,7 +945,7 @@ size_t EnergomeraIecComponent::receive_frame_ack_nack_() {
 size_t EnergomeraIecComponent::receive_prog_frame_(uint8_t start_byte, bool accept_ack_and_nack) {
   // "<start_byte>data<ETX><BCC>"
   //  ESP_LOGVV(TAG, "Waiting for R1 frame, start byte: 0x%02x", start_byte);
-  auto frame_end_check_iec = [=](uint8_t *b, size_t s) {
+  auto frame_end_check_iec = [this, start_byte, accept_ack_and_nack](uint8_t *b, size_t s) {
     auto ret = (accept_ack_and_nack && s == 1 && b[0] == ACK) ||  // ACK - request accepted
                (accept_ack_and_nack && s == 1 && b[0] == NAK) ||  // NACK - request rejected
                (s > 3 && b[0] == start_byte && b[s - 2] == ETX);  // Normal reply frame
