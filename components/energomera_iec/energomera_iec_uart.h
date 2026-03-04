@@ -86,13 +86,11 @@ class EnergomeraIecUart final : public uart::ESP8266UartComponent {
 class EnergomeraIecUart final : public uart::IDFUARTComponent {
  public:
   EnergomeraIecUart(uart::IDFUARTComponent &uart)
-      : uart_(uart), iuart_num_(uart.*(&EnergomeraIecUart::uart_num_)), ilock_(uart.*(&EnergomeraIecUart::lock_)) {}
+      : uart_(uart), iuart_num_(uart.*(&EnergomeraIecUart::uart_num_)) {}
 
   // Reconfigure baudrate
   void update_baudrate(uint32_t baudrate) {
-    xSemaphoreTake(ilock_, portMAX_DELAY);
     uart_set_baudrate(iuart_num_, baudrate);
-    xSemaphoreGive(ilock_);
   }
 
   bool read_one_byte(uint8_t *data) { return read_array_quick_(data, 1); }
@@ -116,7 +114,6 @@ class EnergomeraIecUart final : public uart::IDFUARTComponent {
     size_t length_to_read = len;
     if (!this->check_read_timeout_quick_(len))
       return false;
-    xSemaphoreTake(this->ilock_, portMAX_DELAY);
     if (this->has_peek_) {
       length_to_read--;
       *data = this->peek_byte_;
@@ -125,14 +122,12 @@ class EnergomeraIecUart final : public uart::IDFUARTComponent {
     }
     if (length_to_read > 0)
       uart_read_bytes(this->iuart_num_, data, length_to_read, 20 / portTICK_PERIOD_MS);
-    xSemaphoreGive(this->ilock_);
 
     return true;
   }
 
   uart::IDFUARTComponent &uart_;
   uart_port_t iuart_num_;
-  SemaphoreHandle_t &ilock_;
 };
 #endif
 
