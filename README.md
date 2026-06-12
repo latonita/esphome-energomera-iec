@@ -5,7 +5,10 @@
 [СПб ЗИП ЦЭ2727А](https://github.com/latonita/esphome-ce2727a-meter) •
 [Ленэлектро ЛЕ-2](https://github.com/latonita/esphome-le2-meter) •
 [Пульсар-М](https://github.com/latonita/esphome-pulsar-m) •
-[Энергомера BLE](https://github.com/latonita/esphome-energomera-ble)
+[Энергомера BLE](https://github.com/latonita/esphome-energomera-ble) •
+[Нартис RF433](https://github.com/latonita/esphome-nartis-rf-meter) •
+[Nordic UART (BLE NUS)](https://github.com/latonita/esphome-nordic-uart-ble) •
+
 
 # ESPHome компонент для подключения счетчиков электроэнергии Энергомера CE102M CE207 CE208 CE301 CE303 CE307 CE308 по RS-485 (ГОСТ МЭК/IEC 61107-2011)
 
