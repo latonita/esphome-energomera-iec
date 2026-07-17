@@ -3,6 +3,7 @@
 #include "esphome/core/application.h"
 #include "esphome/core/time.h"
 #include "energomera_iec.h"
+#include <cinttypes>
 #include <sstream>
 
 namespace esphome {
@@ -101,20 +102,14 @@ uint8_t baud_rate_to_byte(uint32_t baud) {
 }
 
 void EnergomeraIecComponent::set_baud_rate_(uint32_t baud_rate) {
-  ESP_LOGV(TAG, "Setting baud rate %u bps", baud_rate);
+  ESP_LOGV(TAG, "Setting baud rate %" PRIu32 " bps", baud_rate);
   iuart_->update_baudrate(baud_rate);
 }
 
 void EnergomeraIecComponent::setup() {
   ESP_LOGD(TAG, "setup");
 
-#ifdef USE_ESP32
-  iuart_ = make_unique<EnergomeraIecUart>(*static_cast<uart::IDFUARTComponent *>(this->parent_));
-#endif
-
-#if USE_ESP8266
-  iuart_ = make_unique<EnergomeraIecUart>(*static_cast<uart::ESP8266UartComponent *>(this->parent_));
-#endif
+  iuart_ = make_unique<EnergomeraIecUart>(this->parent_);
   if (this->flow_control_pin_ != nullptr) {
     this->flow_control_pin_->setup();
   }
@@ -131,7 +126,7 @@ void EnergomeraIecComponent::dump_config() {
 
   LOG_UPDATE_INTERVAL(this);
   LOG_PIN("  Flow Control Pin: ", this->flow_control_pin_);
-  ESP_LOGCONFIG(TAG, "  Receive Timeout: %ums", this->receive_timeout_ms_);
+  ESP_LOGCONFIG(TAG, "  Receive Timeout: %" PRIu32 "ms", this->receive_timeout_ms_);
   ESP_LOGCONFIG(TAG, "  Supported Meter Types: CE102M/CE301/CE303/...");
   ESP_LOGCONFIG(TAG, "  Sensors:");
   for (const auto &sensors : sensors_) {
@@ -516,7 +511,7 @@ void EnergomeraIecComponent::loop() {
         return;
       }
 
-      ESP_LOGD(TAG, "Time correction needed: %d seconds", correction_seconds);
+      ESP_LOGD(TAG, "Time correction needed: %" PRId32 " seconds", correction_seconds);
 
       constexpr int32_t SECONDS_IN_24H = 24 * 3600;
 
@@ -532,10 +527,10 @@ void EnergomeraIecComponent::loop() {
       } else if (correction_seconds < -29) {
         correction_seconds = -29;
       }
-      ESP_LOGD(TAG, "Setting time correction within +/- 29 seconds: %d", correction_seconds);
+      ESP_LOGD(TAG, "Setting time correction within +/- 29 seconds: %" PRId32, correction_seconds);
 
       char set_time_cmd[16]{0};
-      size_t len = snprintf(set_time_cmd, sizeof(set_time_cmd), "CTIME(%d)", correction_seconds);
+      size_t len = snprintf(set_time_cmd, sizeof(set_time_cmd), "CTIME(%" PRId32 ")", correction_seconds);
       this->prepare_prog_frame_(set_time_cmd, true);
       this->send_frame_prepared_();
       auto read_fn = [this]() { return this->receive_frame_ack_nack_(); };
@@ -640,7 +635,7 @@ void EnergomeraIecComponent::loop() {
       ESP_LOGD(TAG, "Closing session");
       this->send_frame_(CMD_CLOSE_SESSION, sizeof(CMD_CLOSE_SESSION));
       this->set_next_state_(State::PUBLISH);
-      ESP_LOGD(TAG, "Total connection time: %u ms", millis() - this->loop_state_.session_started_ms);
+      ESP_LOGD(TAG, "Total connection time: %" PRIu32 " ms", millis() - this->loop_state_.session_started_ms);
       this->loop_state_.sensor_iter = this->sensors_.begin();
       break;
 
@@ -714,7 +709,7 @@ void EnergomeraIecComponent::sync_device_time() {
 #endif
 
 void EnergomeraIecComponent::set_device_time(uint32_t timestamp) {
-  ESP_LOGD(TAG, "set_device_time: %u", timestamp);
+  ESP_LOGD(TAG, "set_device_time: %" PRIu32, timestamp);
   if (!timestamp)
     return;
   this->time_to_set_ = timestamp;
@@ -791,7 +786,7 @@ void EnergomeraIecComponent::set_next_state_delayed_(uint32_t ms, State next_sta
   if (ms == 0) {
     set_next_state_(next_state);
   } else {
-    ESP_LOGV(TAG, "Short delay for %u ms", ms);
+    ESP_LOGV(TAG, "Short delay for %" PRIu32 " ms", ms);
     set_next_state_(State::WAIT);
     wait_.start_time = millis();
     wait_.delay_ms = ms;
@@ -1107,10 +1102,10 @@ void EnergomeraIecComponent::log_state_(State *next_state) {
 void EnergomeraIecComponent::stats_dump_() {
   ESP_LOGV(TAG, "============================================");
   ESP_LOGV(TAG, "Data collection and publishing finished.");
-  ESP_LOGV(TAG, "Total number of sessions ............. %u", this->stats_.connections_tried_);
-  ESP_LOGV(TAG, "Total number of invalid frames ....... %u", this->stats_.invalid_frames_);
-  ESP_LOGV(TAG, "Total number of CRC errors ........... %u", this->stats_.crc_errors_);
-  ESP_LOGV(TAG, "Total number of CRC errors recovered . %u", this->stats_.crc_errors_recovered_);
+  ESP_LOGV(TAG, "Total number of sessions ............. %" PRIu32, this->stats_.connections_tried_);
+  ESP_LOGV(TAG, "Total number of invalid frames ....... %" PRIu32, this->stats_.invalid_frames_);
+  ESP_LOGV(TAG, "Total number of CRC errors ........... %" PRIu32, this->stats_.crc_errors_);
+  ESP_LOGV(TAG, "Total number of CRC errors recovered . %" PRIu32, this->stats_.crc_errors_recovered_);
   ESP_LOGV(TAG, "CRC errors per session ............... %f", this->stats_.crc_errors_per_session());
   ESP_LOGV(TAG, "Number of failures ................... %u", this->stats_.failures_);
   ESP_LOGV(TAG, "============================================");

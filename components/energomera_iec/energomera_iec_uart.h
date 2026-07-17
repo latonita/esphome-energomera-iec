@@ -1,135 +1,52 @@
 #pragma once
+#include <cstddef>
 #include <cstdint>
 
-#ifdef USE_ESP32
-#include "esphome/components/uart/uart_component_esp_idf.h"
-#include "esphome/core/log.h"
-#endif
-
-#ifdef USE_ESP8266
-#include "esphome/components/uart/uart_component_esp8266.h"
-#endif
-
-#ifdef USE_ESP_IDF
-// backward compatibility with old IDF versions
-#ifndef portTICK_PERIOD_MS
-#define portTICK_PERIOD_MS portTICK_RATE_MS
-#endif
-#endif
+#include "esphome/components/uart/uart.h"
+#include "esphome/core/hal.h"
 
 namespace esphome {
 namespace energomera_iec {
 
-static const uint32_t TIMEOUT = 20;  // default value in uart implementation is 100ms
+static const uint32_t TIMEOUT = 20;  // ms; default timeout in the uart implementation is 100ms
 
-#ifdef USE_ESP8266
-
-class XSoftSerial : public uart::ESP8266SoftwareSerial {
+// Thin helper around the configured UART bus.
+//
+// It exists only to (a) change the baud rate at runtime -- the IEC 61107 handshake negotiates a
+// new speed in the middle of a session -- and (b) read a single byte with a short timeout instead
+// of the default 100ms. Both are done through the public UARTComponent API, so it makes no
+// assumptions about the concrete platform driver (ESP-IDF, ESP8266, ...).
+class EnergomeraIecUart {
  public:
-  void set_bit_time(uint32_t bt) { bit_time_ = bt; }
-};
+  explicit EnergomeraIecUart(uart::UARTComponent *parent) : parent_(parent) {}
 
-class EnergomeraIecUart final : public uart::ESP8266UartComponent {
- public:
-  EnergomeraIecUart(uart::ESP8266UartComponent const &uart)
-      : uart_(uart), hw_(uart.*(&EnergomeraIecUart::hw_serial_)), sw_(uart.*(&EnergomeraIecUart::sw_serial_)) {}
-
+  // Reconfigure the bus to a new baud rate.
   void update_baudrate(uint32_t baudrate) {
-    if (this->hw_ != nullptr) {
-      this->hw_->updateBaudRate(baudrate);
-    } else if (baudrate > 0) {
-      ((XSoftSerial *) sw_)->set_bit_time(F_CPU / baudrate);
-    }
+    this->parent_->set_baud_rate(baudrate);
+    this->parent_->load_settings(false);
   }
 
+  // Read one byte, waiting at most TIMEOUT ms for it to arrive.
   bool read_one_byte(uint8_t *data) {
-    if (this->hw_ != nullptr) {
-      if (!this->check_read_timeout_quick_(1))
-        return false;
-      this->hw_->readBytes(data, 1);
-    } else {
-      if (sw_->available() < 1)
-        return false;
-      assert(this->sw_ != nullptr);
-      optional<uint8_t> b = this->sw_->read_byte();
-      if (b) {
-        *data = *b;
-      } else {
-        return false;
-      }
-    }
-    return true;
-  }
-
- protected:
-  bool check_read_timeout_quick_(size_t len) {
-    if (this->hw_->available() >= int(len))
-      return true;
-
-    uint32_t start_time = millis();
-    while (this->hw_->available() < int(len)) {
-      if (millis() - start_time > TIMEOUT) {
-        return false;
-      }
-      yield();
-    }
-    return true;
-  }
-
-  uart::ESP8266UartComponent const &uart_;
-  HardwareSerial *const hw_;               // hardware Serial
-  uart::ESP8266SoftwareSerial *const sw_;  // software serial
-};
-#endif
-
-#ifdef USE_ESP32
-class EnergomeraIecUart final : public uart::IDFUARTComponent {
- public:
-  EnergomeraIecUart(uart::IDFUARTComponent &uart)
-      : uart_(uart), iuart_num_(uart.*(&EnergomeraIecUart::uart_num_)) {}
-
-  // Reconfigure baudrate
-  void update_baudrate(uint32_t baudrate) {
-    uart_set_baudrate(iuart_num_, baudrate);
-  }
-
-  bool read_one_byte(uint8_t *data) { return read_array_quick_(data, 1); }
-
- protected:
-  bool check_read_timeout_quick_(size_t len) {
-    if (uart_.available() >= int(len))
-      return true;
-
-    uint32_t start_time = millis();
-    while (uart_.available() < int(len)) {
-      if (millis() - start_time > TIMEOUT) {
-        return false;
-      }
-      yield();
-    }
-    return true;
-  }
-
-  bool read_array_quick_(uint8_t *data, size_t len) {
-    size_t length_to_read = len;
-    if (!this->check_read_timeout_quick_(len))
+    if (!this->wait_for_data_(1))
       return false;
-    if (this->has_peek_) {
-      length_to_read--;
-      *data = this->peek_byte_;
-      data++;
-      this->has_peek_ = false;
-    }
-    if (length_to_read > 0)
-      uart_read_bytes(this->iuart_num_, data, length_to_read, 20 / portTICK_PERIOD_MS);
+    return this->parent_->read_byte(data);
+  }
 
+ protected:
+  bool wait_for_data_(size_t len) {
+    uint32_t start_time = millis();
+    while (this->parent_->available() < len) {
+      if (millis() - start_time > TIMEOUT) {
+        return false;
+      }
+      yield();
+    }
     return true;
   }
 
-  uart::IDFUARTComponent &uart_;
-  uart_port_t iuart_num_;
+  uart::UARTComponent *parent_;
 };
-#endif
 
 }  // namespace energomera_iec
 }  // namespace esphome
