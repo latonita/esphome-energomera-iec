@@ -7,8 +7,10 @@
 [Пульсар-М](https://github.com/latonita/esphome-pulsar-m) •
 [Энергомера BLE](https://github.com/latonita/esphome-energomera-ble) •
 [Нартис RF433](https://github.com/latonita/esphome-nartis-rf-meter) •
-[Нартис RF433-2](https://github.com/latonita/esphome-uart-nartis-rf) •
+[Нартис RF433-2](https://github.com/latonita/esphome-nartis-rf-2-meter) •
+[Мост UART↔RF433-2](https://github.com/latonita/esphome-uart-nartis-rf) •
 [Nordic UART (BLE NUS)](https://github.com/latonita/esphome-nordic-uart-ble) •
+
 
 # ESPHome компонент для подключения счетчиков электроэнергии Энергомера CE102M CE207 CE208 CE301 CE303 CE307 CE308 по RS-485 (ГОСТ МЭК/IEC 61107-2011)
 
