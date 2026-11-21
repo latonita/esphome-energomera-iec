@@ -9,7 +9,7 @@
 namespace esphome {
 namespace energomera_iec {
 
-static const char *TAG0 = "energomera_iec_";
+static constexpr char TAG0[] = "energomera_iec_";
 #define TAG (this->tag_.c_str())
 
 static constexpr uint8_t SOH = 0x01;
@@ -1127,7 +1127,12 @@ void EnergomeraIecComponent::unlock_uart_session_() {
 
 uint8_t EnergomeraIecComponent::next_obj_id_ = 0;
 
-std::string EnergomeraIecComponent::generateTag() { return str_sprintf("%s%03d", TAG0, ++next_obj_id_); }
+std::string EnergomeraIecComponent::generateTag() {
+  // %03d of uint8_t is exactly 3 digits; sizeof(TAG0) includes the trailing NUL.
+  char buf[sizeof(TAG0) + 3];
+  buf_append_printf(buf, sizeof(buf), 0, "%s%03d", TAG0, ++next_obj_id_);
+  return buf;
+}
 
 }  // namespace energomera_iec
 }  // namespace esphome
