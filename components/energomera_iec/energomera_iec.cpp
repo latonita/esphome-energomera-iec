@@ -862,7 +862,7 @@ void EnergomeraIecComponent::log_hex_(const char *dir, const uint8_t *data, size
   char hex_buf[format_hex_pretty_size(CHUNK)];
   for (size_t off = 0; off < len; off += CHUNK) {
     size_t n = std::min(CHUNK, len - off);
-    ESP_LOGVV(TAG, "%s[%u]: %s", dir, static_cast<unsigned>(off), format_hex_pretty_to(hex_buf, data + off, n));
+    ESP_LOGVV(TAG, "%s[%u]: %s", dir, static_cast<unsigned>(off), format_hex_pretty_to(hex_buf, data + off, n, '.'));
   }
 #endif
 }
