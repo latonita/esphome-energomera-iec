@@ -160,6 +160,7 @@ class EnergomeraIecComponent : public PollingComponent, public uart::UARTDevice 
 
   void send_frame_(const uint8_t *data, size_t length);
   void send_frame_prepared_();
+  void log_hex_(const char *dir, const uint8_t *data, size_t len);
 
   size_t receive_frame_(FrameStopFunction stop_fn);
   size_t receive_frame_ascii_();
